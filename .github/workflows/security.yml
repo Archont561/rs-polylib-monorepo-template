@@ -35,10 +35,16 @@ jobs:
           cache-key: security-rust
 
       - name: Run online cargo-deny checks
-        run: pixi run -e rust tools run security deny_rs --online
+        uses: ./.github/actions/diagnose
+        with:
+          label: "cargo-deny (online)"
+          command: pixi run -e rust tools run security deny_rs --online
 
       - name: Run RustSec cargo-audit against Cargo.lock
-        run: pixi run -e rust tools run security audit_rs
+        uses: ./.github/actions/diagnose
+        with:
+          label: "cargo-audit"
+          command: pixi run -e rust tools run security audit_rs
 
   python-dependencies:
     name: Python Dependency Vulnerability Audit
