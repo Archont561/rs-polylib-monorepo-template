@@ -232,11 +232,22 @@ def _pack_tarball(root: Path, spec: TsPackageSpec, tmp_path: Path, *, lint_pkg: 
     return tarball
 
 
+def _tarball_ref(tarball: Path) -> str:
+    """Return a `file:` dependency reference for a local tarball.
+
+    `file:` followed by a bare path is ambiguous: on Windows the path starts
+    with a drive letter, so `file:C:\\dir\\pkg.tgz` is parsed as a URL with
+    the host `C:` instead of a local path. `Path.as_uri()` renders a proper
+    `file://` URL with forward slashes on every platform.
+    """
+    return tarball.as_uri()
+
+
 def _backend_cases(
     tarballs: dict[str, Path],
 ) -> tuple[tuple[str, dict[str, object], str, tuple[str, ...]], ...]:
-    wasm_ref = f"file:{tarballs[_WASM_PKG]}"
-    js_ref = f"file:{tarballs[_JS_PKG]}"
+    wasm_ref = _tarball_ref(tarballs[_WASM_PKG])
+    js_ref = _tarball_ref(tarballs[_JS_PKG])
     return (
         (
             "consumer-wasm",
@@ -256,9 +267,9 @@ def _backend_cases(
 def _facade_cases(
     tarballs: dict[str, Path],
 ) -> tuple[tuple[str, dict[str, object], str, tuple[str, ...]], ...]:
-    wasm_ref = f"file:{tarballs[_WASM_PKG]}"
-    js_ref = f"file:{tarballs[_JS_PKG]}"
-    facade_ref = f"file:{tarballs[_FACADE_PKG]}"
+    wasm_ref = _tarball_ref(tarballs[_WASM_PKG])
+    js_ref = _tarball_ref(tarballs[_JS_PKG])
+    facade_ref = _tarball_ref(tarballs[_FACADE_PKG])
     return (
         (
             "consumer-facade-native",

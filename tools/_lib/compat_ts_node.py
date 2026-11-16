@@ -100,10 +100,21 @@ def _run_node_consumer(
     _run_cmd((_NODE, _CHECK_MJS), consumer_dir)
 
 
+def _tarball_ref(tarball: Path) -> str:
+    """Return a `file:` dependency reference for a local tarball.
+
+    `file:` followed by a bare path is ambiguous: on Windows the path starts
+    with a drive letter, so `file:C:\\dir\\pkg.tgz` is parsed as a URL with
+    the host `C:` instead of a local path. `Path.as_uri()` renders a proper
+    `file://` URL with forward slashes on every platform.
+    """
+    return tarball.as_uri()
+
+
 def _node_manifests(tarballs: dict[str, Path]) -> tuple[dict[str, object], dict[str, object]]:
-    wasm_ref = f"file:{tarballs[_WASM_PKG]}"
-    js_ref = f"file:{tarballs[_JS_PKG]}"
-    facade_ref = f"file:{tarballs[_FACADE_PKG]}"
+    wasm_ref = _tarball_ref(tarballs[_WASM_PKG])
+    js_ref = _tarball_ref(tarballs[_JS_PKG])
+    facade_ref = _tarball_ref(tarballs[_FACADE_PKG])
     native_manifest: dict[str, object] = {
         "name": "node-consumer-native",
         "type": "module",
