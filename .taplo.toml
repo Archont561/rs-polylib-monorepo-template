@@ -1,0 +1,17 @@
+exclude = [
+  ".pixi/**",
+  ".tox/**",
+  "node_modules/**",
+  "**/node_modules/**",
+  "target/**",
+  "dist/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/vendor/**",
+  "**/.gradle/**",
+  "**/.build/**",
+]
+
+[formatting]
+indent_string = "  "
+column_width = 100

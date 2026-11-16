@@ -1,0 +1,42 @@
+# rumdl — fast Rust Markdown & MDX linter/formatter.
+# Run locally and in CI with `pixi run tools run docs md` (or `--fix`).
+
+[global]
+flavor = "gfm"
+line-length = 100
+respect-gitignore = true
+cache = true
+cache-dir = ".rumdl_cache"
+exclude = [
+  ".agents/skills/**",
+  ".pixi/**",
+  "apps/docs/.next/**",
+  "apps/docs/.source/**",
+  "apps/docs/out/**",
+  "backlog/tasks/**",
+  "coverage/**",
+  "dist/**",
+  "node_modules/**",
+  "packages/polylib-kt/build/**",
+  "packages/polylib-kt/.gradle/**",
+  "packages/polylib-swift/.build/**",
+  "packages/polylib-rb/vendor/**",
+  "target/**",
+]
+disable = [
+  # Prose paragraphs and wide Markdown tables frequently exceed 100 chars;
+  # keep structural rules strict while leaving line wrapping flexible.
+  "MD013",
+]
+
+[per-file-flavor]
+"apps/docs/content/**/*.mdx" = "mdx"
+
+[MD004]
+style = "dash"
+
+[MD049]
+style = "asterisk"
+
+[MD050]
+style = "asterisk"

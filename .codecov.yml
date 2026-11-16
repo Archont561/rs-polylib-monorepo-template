@@ -1,0 +1,90 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "90...100"
+  status:
+    project:
+      default: false
+      rust:
+        flags: [rust]
+        target: 90%
+        threshold: 0%
+      python:
+        flags: [python]
+        target: 90%
+        threshold: 0%
+      ts:
+        flags: [ts]
+        target: 90%
+        threshold: 0%
+      kotlin:
+        flags: [kotlin]
+        target: 90%
+        threshold: 0%
+      ruby:
+        flags: [ruby]
+        target: 90%
+        threshold: 0%
+      swift:
+        flags: [swift]
+        target: 90%
+        threshold: 0%
+    patch:
+      default:
+        target: 90%
+        threshold: 0%
+
+flags:
+  rust:
+    paths:
+      - crates/polylib-core/src/
+      - crates/polylib/src/
+    carryforward: true
+  python:
+    paths:
+      - packages/polylib-py/src/
+    carryforward: true
+  ts:
+    paths:
+      - packages/polylib-ts/src/
+      - packages/polylib-wasm/src/
+      - packages/polylib-js/src/
+    carryforward: true
+  kotlin:
+    paths:
+      - packages/polylib-kt/src/main/kotlin/
+    carryforward: true
+  ruby:
+    paths:
+      - packages/polylib-rb/lib/
+    carryforward: true
+  swift:
+    paths:
+      - packages/polylib-swift/Sources/Polylib/
+    carryforward: true
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/generated/**"
+  - "**/tests/**"
+  - "**/Tests/**"
+  - "**/test/**"
+  - "**/*.feature"
+  - "packages/polylib-wasm/src/wasm/**"
+  - "packages/polylib-js/src/native/**"
+  - "packages/polylib-kt/src/generated/**"
+  - "packages/polylib-rb/lib/polylib/generated/**"
+  - "packages/polylib-swift/Sources/PolylibFFI/**"
+  - "packages/polylib-swift/Sources/PolylibFFIInternal/**"
+  - "apps/docs/**"
+  - "backlog/**"
+  - "tools/**"
