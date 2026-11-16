@@ -1,0 +1,110 @@
+[workspace]
+name = "polyglot-lib-template"
+version = "0.1.0"
+channels = ["https://prefix.dev/archont561/archont561", "conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+# ---------------------------------------------------------------------------
+# Single automation entrypoint (enforced by .alint/schemas/pixi-tasks.schema.json)
+# All repository and agent automation runs via `pixi run [-e <env>] tools ...`.
+# ---------------------------------------------------------------------------
+
+[tasks]
+tools = "python -B -m tasknest"
+
+# ---------------------------------------------------------------------------
+# Split features — dependencies only (no feature tasks; use `tools/*.py`)
+# ---------------------------------------------------------------------------
+
+[feature.base.dependencies]
+python = ">=3.12,<3.13"
+jinja2 = ">=3.1,<4"
+tox = ">=4.0,<5"
+
+[feature.base.pypi-dependencies]
+tasknest = "==0.4.0"
+
+[feature.js.dependencies]
+bun = ">=1.4,<2"
+
+[feature.py.dependencies]
+ruff = ">=0.17,<1"
+mypy = ">=2.0,<3"
+pytest = ">=9.0,<10"
+pytest-cov = ">=7.0,<8"
+hypothesis = ">=6.170,<7"
+virtualenv = ">=21.0,<22"
+maturin = ">=1.16,<2"
+pip = "*"
+pip-audit = ">=2.10,<3"
+
+[feature.py.pypi-dependencies]
+pytest-bdd = "==9.0.1"
+rude = "==0.1a4"
+rude-clean-code = "==0.4.0"
+
+[feature.py.activation.env]
+PYTHONPATH = "$PIXI_PROJECT_ROOT/packages/polylib-py/src"
+
+[feature.lint.dependencies]
+actionlint = ">=1.7,<2"
+convco = ">=0.7,<1"
+lychee = ">=0.24,<1"
+taplo = ">=0.10,<1"
+vale = ">=3.27,<4"
+
+[feature.lint.target.unix.dependencies]
+lefthook = ">=2.2,<3"
+shellcheck = ">=0.11,<1"
+
+[feature.lint.pypi-dependencies]
+alint = "==0.22.1"
+gherlint = "==0.5.0"
+rumdl = "==0.3.4"
+
+[feature.sandbox.dependencies]
+pixi-sandbox = "=0.9.0"
+
+[feature.rust.dependencies]
+rust = "=1.100.0"
+rust-std-wasm32-unknown-unknown = "=1.100.0"
+cargo-nextest = ">=0.9.150,<0.10"
+cargo-llvm-cov = ">=0.9.1,<0.10"
+cargo-deny = ">=0.20.2,<0.21"
+cargo-audit = ">=0.22.1,<0.23"
+llvm-tools = "*"
+wasm-bindgen-cli = "=0.2.130"
+binaryen = "*"
+
+[feature.rust.target.unix.dependencies]
+c-compiler = "*"
+
+[feature.rust.activation.env]
+LLVM_COV = "$CONDA_PREFIX/bin/llvm-cov"
+LLVM_PROFDATA = "$CONDA_PREFIX/bin/llvm-profdata"
+
+[feature.kt.dependencies]
+openjdk = ">=21,<22"
+gradle = ">=9,<10"
+
+[feature.rb.dependencies]
+ruby = ">=3.3,<3.5"
+libffi = "*"
+pkg-config = "*"
+
+# ---------------------------------------------------------------------------
+# Split environments — every environment includes `base` so `pixi run tools`
+# works uniformly across all lanes
+# ---------------------------------------------------------------------------
+
+[environments]
+default = { features = ["base", "js", "py", "lint", "sandbox"], solve-group = "default" }
+py = { features = ["base", "py"], solve-group = "default" }
+js = { features = ["base", "js"], solve-group = "default" }
+lint = { features = ["base", "py", "js", "lint"], solve-group = "default" }
+docs = { features = ["base", "js", "lint"], solve-group = "default" }
+rust = { features = ["base", "rust"], solve-group = "rust" }
+full = { features = ["base", "js", "py", "lint", "sandbox", "rust"], solve-group = "rust" }
+kt = { features = ["base", "rust", "kt"], solve-group = "ffi" }
+rb = { features = ["base", "rust", "rb"], solve-group = "ffi" }
+ffi = { features = ["base", "rust", "kt", "rb"], solve-group = "ffi" }

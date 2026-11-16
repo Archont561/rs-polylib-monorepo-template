@@ -1,0 +1,167 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!.agents/skills",
+      "!.vale/styles/Microsoft",
+      "!.github/ISSUE_TEMPLATE",
+      "!.github/workflows/publish-sandbox.yml",
+      "!.github/workflows/relock.yml",
+      "!scripts/restore.sh",
+      "!apps/docs/.next",
+      "!apps/docs/.source",
+      "!apps/docs/out",
+      "!apps/docs/next-env.d.ts",
+      "!packages/polylib-js/src/native",
+      "!packages/polylib-js/dist",
+      "!packages/polylib-wasm/src/wasm",
+      "!packages/polylib-wasm/dist",
+      "!packages/polylib-ts/dist",
+      "!packages/polylib-kt/.gradle",
+      "!packages/polylib-kt/build",
+      "!packages/polylib-kt/src/generated",
+      "!packages/polylib-swift/.build",
+      "!packages/polylib-swift/.native",
+      "!packages/polylib-rb/vendor",
+      "!packages/polylib-rb/.bundle"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "markdown": {
+    "formatter": {
+      "enabled": false
+    },
+    "linter": {
+      "enabled": false
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
+                "message": "Use @/, @polylib/<pkg>, or ./ imports instead of parent (../) or non-@ aliases."
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/polylib-js/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
+                    "message": "Use @/ or ./ imports inside packages/polylib-js/src."
+                  },
+                  {
+                    "group": ["@polylib/app-*", "@polylib/config"],
+                    "message": "Published @polylib/polylib-js runtime code cannot import private config or app packages."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/polylib-wasm/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
+                    "message": "Use @/ or ./ imports inside packages/polylib-wasm/src."
+                  },
+                  {
+                    "group": ["@polylib/app-*", "@polylib/config"],
+                    "message": "Published @polylib/polylib-wasm runtime code cannot import private config or app packages."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/polylib-ts/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
+                    "message": "Use @/ or ./ imports inside packages/polylib-ts/src."
+                  },
+                  {
+                    "group": ["@polylib/app-*", "@polylib/config"],
+                    "message": "Published @polylib/polylib runtime code cannot import private config or app packages."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/docs/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
+                    "message": "Use @/ or ./ imports inside apps/docs/src."
+                  },
+                  {
+                    "group": ["@polylib/app-*"],
+                    "message": "apps/docs must stay isolated from other apps."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

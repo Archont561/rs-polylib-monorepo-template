@@ -1,0 +1,9 @@
+[install]
+frozenLockfile = false
+exact = true
+
+[test]
+coverageDir = "coverage/ts"
+coverageReporter = ["text", "lcov"]
+coveragePathIgnorePatterns = ["**/src/native/**", "**/src/wasm/**", "**/tests/**", "**/*.feature"]
+coverageThreshold = { line = 0.9 }

@@ -1,0 +1,22 @@
+{
+  "name": "polyglot-lib-template",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "workspaces": [
+    "packages/config",
+    "packages/polylib-js",
+    "packages/polylib-ts",
+    "packages/polylib-wasm",
+    "apps/docs"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@types/bun": "1.4.4",
+    "backlog.md": "1.55.3",
+    "skills": "1.8.1",
+    "typescript": "7.0.2"
+  }
+}
