@@ -26,7 +26,7 @@ the total.
 - **Python**—`polylib.summarize_scores(values: Sequence[float]) -> ScoreSummary`
 - **TypeScript**—`summarizeScores(values: readonly number[]): ScoreSummary`
 
-Empty input raises `empty_scores`. A value that isn't finite raises
+Empty input raises `empty_scores`. A value outside the finite range raises
 `non_finite_value`.
 
 ## Error codes
@@ -52,5 +52,5 @@ Every package reports the same version, taken from the workspace manifest:
 - **TypeScript**—`VERSION`, with `getEngineVersion()` reporting the version of
   the active engine build.
 
-The TypeScript facade additionally exports `BACKEND`, which names the engine that
-is active at run time: either the native NAPI-RS addon or the WebAssembly module.
+The TypeScript facade additionally exports `BACKEND`, which names the engine active
+at run time: either the native NAPI-RS addon or the WebAssembly module.
