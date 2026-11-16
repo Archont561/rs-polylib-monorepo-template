@@ -1,0 +1,23 @@
+# frozen_string_literal: true
+
+require "rake/testtask"
+
+Rake::TestTask.new(:minitest) do |t|
+  t.libs << "lib"
+  t.libs << "test"
+  t.pattern = "test/test_*.rb"
+end
+
+desc "Run shared Gherkin conformance specs with Cucumber"
+task :conformance do
+  sh "bundle", "exec", "cucumber",
+     "--publish-quiet",
+     "../../conformance/slug.feature",
+     "../../conformance/scores.feature",
+     "--require", "conformance_steps"
+end
+
+desc "Run unit tests and shared Gherkin conformance specs"
+task test: %i[minitest conformance]
+
+task default: :test

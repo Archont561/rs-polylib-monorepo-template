@@ -1,0 +1,6 @@
+[test]
+preload = ["./tests/cucumber.ts"]
+coverageDir = "../../coverage/ts/polylib-wasm"
+coverageReporter = ["text", "lcov"]
+coveragePathIgnorePatterns = ["**/src/wasm/**", "**/tests/**", "**/*.feature"]
+coverageThreshold = { line = 0.9 }

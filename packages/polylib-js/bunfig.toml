@@ -1,0 +1,6 @@
+[test]
+preload = ["./tests/cucumber.ts"]
+coverageDir = "../../coverage/ts/polylib-js"
+coverageReporter = ["text", "lcov"]
+coveragePathIgnorePatterns = ["**/src/native/**", "**/tests/**", "**/*.feature"]
+coverageThreshold = { line = 0.9 }
