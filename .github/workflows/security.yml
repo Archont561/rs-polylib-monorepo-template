@@ -1,24 +1,13 @@
 name: Security
 
-# Every audit below reads a different set of inputs, so the filtering lives on
-# the jobs rather than on the workflow.
+# Every pull request starts this workflow so each job can report a status, then
+# the `changes` job decides which audits the change can actually affect. A
+# documentation-only pull request therefore reaches only the secret scan.
 #
-# A workflow-level `paths` filter cannot express that: one shared allowlist has
-# to cover the union of every job's inputs, so the broadest job drags the
-# others along. The previous list included `apps/**` and `tools/**`, which meant
-# a pull request that only touched a single documentation `.tsx` file still ran
-# all nine security jobs.
-#
-# Job-level `paths` filters are evaluated against the whole pull request diff,
-# not only the latest push, and each job lists only what it actually reads.
-#
-# A job skipped by a path filter still reports its check as successful, so
-# branch protection keeps seeing a status. That is why the workflow itself is
-# never path-filtered: a workflow that does not start reports nothing at all,
-# and a required check would block the pull request forever.
-#
-# `paths` is not evaluated for `schedule` or `workflow_dispatch`, so the weekly
-# advisory sweep still runs every job against the whole repository.
+# A workflow-level `paths` filter would stop the workflow from starting at all,
+# but GitHub leaves the checks of a non-started workflow pending instead of
+# skipped, which blocks the merge it was meant to speed up. The weekly schedule
+# and a manual dispatch audit the whole repository regardless of what changed.
 on:
   push:
     branches:
@@ -37,19 +26,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # GitHub applies `paths` to the workflow as a whole and offers no per-job
+  # equivalent, so this job answers the question once and the audits read the
+  # answer. A skipped job still reports a status, which a workflow-level filter
+  # does not: a required check must never sit pending.
+  #
+  # A scheduled or manual run audits everything, so the outputs are all `true`
+  # and no audit can be skipped by an empty or unrelated diff.
+  changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.detect.outputs.rust }}
+      python: ${{ steps.detect.outputs.python }}
+      js: ${{ steps.detect.outputs.js }}
+      codeql-rust: ${{ steps.detect.outputs.codeql-rust }}
+      codeql-python: ${{ steps.detect.outputs.codeql-python }}
+      codeql-javascript-typescript: ${{ steps.detect.outputs.codeql-javascript-typescript }}
+      codeql-actions: ${{ steps.detect.outputs.codeql-actions }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Compare the change against the filters
+        id: detect
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # A scheduled or manual run is a whole-repository audit, so every
+          # filter is forced on rather than derived from an empty diff.
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Whole-repository run: enabling every audit."
+            for key in rust python js codeql-rust codeql-python \
+                       codeql-javascript-typescript codeql-actions; do
+              echo "$key=true" >> "$GITHUB_OUTPUT"
+            done
+          else
+            python3 .github/scripts/detect_changes.py --profile security
+          fi
+
   rust-supply-chain:
     name: Rust Supply-Chain & Advisory Audit
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "deny.toml"
-      - ".cargo/audit.toml"
-      - "tools/security/**"
-      - "tools/rust/**"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,16 +104,10 @@ jobs:
 
   python-dependencies:
     name: Python Dependency Vulnerability Audit
+    needs: [changes]
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    paths:
-      - "packages/polylib-py/**"
-      - "pyproject.toml"
-      - "pixi.toml"
-      - "pixi.lock"
-      - "tools/security/**"
-      - "tools/python/**"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,19 +124,10 @@ jobs:
 
   js-dependencies:
     name: JavaScript / Bun Dependency Audit
+    needs: [changes]
+    if: needs.changes.outputs.js == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    paths:
-      - "packages/config/**"
-      - "packages/polylib-js/**"
-      - "packages/polylib-ts/**"
-      - "packages/polylib-wasm/**"
-      - "apps/docs/package.json"
-      - "package.json"
-      - "bun.lock"
-      - "tools/security/**"
-      - "tools/ts/**"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -134,8 +147,6 @@ jobs:
     name: Secret Detection (TruffleHog)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Deliberately not path-filtered: a credential can be committed to any file,
-    # so this scan has to see every change to stay meaningful.
     steps:
       - name: Checkout repository with full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -151,17 +162,14 @@ jobs:
 
   codeql-rust:
     name: CodeQL Static Analysis (rust)
+    needs: [changes]
+    if: needs.changes.outputs.codeql-rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: read
       contents: read
       security-events: write
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -183,18 +191,14 @@ jobs:
 
   codeql-python:
     name: CodeQL Static Analysis (python)
+    needs: [changes]
+    if: needs.changes.outputs.codeql-python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: read
       contents: read
       security-events: write
-    paths:
-      - "packages/polylib-py/**"
-      - "tools/**"
-      - "pyproject.toml"
-      - "pixi.toml"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -216,21 +220,14 @@ jobs:
 
   codeql-javascript-typescript:
     name: CodeQL Static Analysis (javascript-typescript)
+    needs: [changes]
+    if: needs.changes.outputs.codeql-javascript-typescript == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: read
       contents: read
       security-events: write
-    paths:
-      - "packages/polylib-js/**"
-      - "packages/polylib-ts/**"
-      - "packages/polylib-wasm/**"
-      - "packages/config/**"
-      - "apps/docs/**"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -252,16 +249,14 @@ jobs:
 
   codeql-actions:
     name: CodeQL Static Analysis (actions)
+    needs: [changes]
+    if: needs.changes.outputs.codeql-actions == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: read
       contents: read
       security-events: write
-    paths:
-      - ".github/workflows/**"
-      - ".github/actions/**"
-      - ".github/workflows/security.yml"
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -310,10 +305,14 @@ jobs:
         with:
           sarif_file: scorecard.sarif
 
+  # The audits report `skipped` when a change cannot reach them, and branch
+  # protection reads a skipped job as Success. This job is what distinguishes a
+  # justified skip from an audit that silently did not run.
   security-gate:
     name: Security Required Gate
     if: always()
     needs:
+      - changes
       - rust-supply-chain
       - python-dependencies
       - js-dependencies
@@ -325,15 +324,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify every security job that ran succeeded
-        env:
-          # A job skipped by its own path filter still reports a successful
-          # check, so `skipped` is not a failure here. A real failure or a
-          # cancellation is, and must fail the gate.
-          RESULTS: ${{ join(needs.*.result, ',') }}
+      - name: Verify no audit failed
         run: |
-          echo "Job results: $RESULTS"
-          for s in $(echo "$RESULTS" | tr ',' ' '); do
+          statuses="${{ join(needs.*.result, ',') }}"
+          echo "Job results: $statuses"
+          for s in $(echo "$statuses" | tr ',' ' '); do
             case "$s" in
               success|skipped)
                 ;;
