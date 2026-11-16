@@ -1,0 +1,31 @@
+name: "Setup Rust Toolchain & Cache"
+description: "Install a locked Pixi Rust environment with Swatinem/rust-cache."
+
+inputs:
+  environment:
+    description: "Pixi environment containing Rust (`rust` or `full`)."
+    required: false
+    default: "rust"
+  install-bun:
+    description: "Whether to install Bun workspace dependencies."
+    required: false
+    default: "false"
+  cache-key:
+    description: "Shared key prefix for Swatinem/rust-cache."
+    required: false
+    default: "rust-workspace"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Pixi environment
+      uses: ./.github/actions/setup
+      with:
+        environment: ${{ inputs.environment }}
+        install-bun: ${{ inputs.install-bun }}
+
+    - name: Cache Cargo registry and target directory
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        cache-on-failure: true

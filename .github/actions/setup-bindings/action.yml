@@ -1,0 +1,22 @@
+name: "Setup Full Polyglot Environment & Build Bindings"
+description: "Install locked Pixi full environment, Bun deps, Cargo cache, and compile PyO3 + WASM + NAPI-RS bindings."
+
+inputs:
+  cache-key:
+    description: "Shared key prefix for Swatinem/rust-cache."
+    required: false
+    default: "polyglot-bindings"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Rust + Python + Bun full environment
+      uses: ./.github/actions/setup-rust
+      with:
+        environment: full
+        install-bun: "true"
+        cache-key: ${{ inputs.cache-key }}
+
+    - name: Build PyO3, wasm-bindgen, and NAPI-RS artifacts
+      shell: bash
+      run: pixi run -e full tools run bindings build
