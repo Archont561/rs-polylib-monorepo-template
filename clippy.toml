@@ -1,0 +1,9 @@
+# Workspace Clippy configuration
+msrv = "1.88"
+cognitive-complexity-threshold = 20
+too-many-arguments-threshold = 6
+too-many-lines-threshold = 80
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = false
+allow-print-in-tests = true

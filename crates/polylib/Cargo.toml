@@ -1,0 +1,31 @@
+[package]
+name = "polylib"
+description = "Public Rust metacrate facade for polylib with additive feature flags and prelude exports."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+exclude = ["features/**", "tests/**"]
+
+[features]
+default = []
+serde = ["polylib-core/serde"]
+json = ["serde", "dep:serde_json"]
+full = ["json"]
+
+[dependencies]
+polylib-core.workspace = true
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest.workspace = true
+rstest-bdd.workspace = true
+rstest-bdd-macros.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
