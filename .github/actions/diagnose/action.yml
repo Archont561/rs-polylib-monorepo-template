@@ -36,14 +36,18 @@ runs:
             cat "$log"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-          # GitHub keeps only a handful of annotations per step and parses each
-          # one from a single line, so flatten the most relevant part of the
-          # output into one annotation. The reason a tool failed is usually in
-          # the first lines of its output, not the last.
-          head -n 20 "$log" \
+          # GitHub parses each workflow annotation from a single line and keeps
+          # only a handful per step, so pick the lines that name the problem:
+          # the error lines first, then the head of the output.
+          {
+            grep -n -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal)' "$log" \
+              || head -n 12 "$log"
+            echo '--- context ---'
+            head -n 12 "$log"
+          } \
             | tr '\r' '\n' \
             | grep -v '^$' \
-            | head -n 6 \
+            | head -n 8 \
             | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g' \
             | while IFS= read -r line; do
                 echo "::error title=${DIAG_LABEL} failed::${line}"
