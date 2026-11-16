@@ -1,0 +1,50 @@
+[tasknest]
+config_version = 1
+
+[discovery]
+workspaces = true
+
+[[discovery.roots]]
+path = "tools"
+namespace = ""
+project_root = "."
+
+[[discovery.manifests]]
+path = "packages/polylib-py"
+
+[[discovery.manifests]]
+path = "packages/polylib-ts"
+persistent_scripts = ["dev"]
+exclude_scripts = ["prepack"]
+
+[[discovery.manifests]]
+path = "apps/docs"
+persistent_scripts = ["dev"]
+exclude_scripts = ["postinstall"]
+
+[checks]
+strict = true
+require_description = true
+require_tests = false
+require_features = false
+unknown_marks = "error"
+
+[marks]
+fast = "Fast local check suitable for git hooks"
+ci = "Included in CI quality gates"
+rust = "Requires the Pixi rust or full environment"
+python = "Requires the Pixi py, lint, or full environment"
+ts = "Requires the Pixi js, lint, or full environment"
+ffi = "Requires the Pixi ffi, kt, rb, or rust environment for UniFFI bindings"
+compat = "Package, tarball, and version compatibility verification"
+docs = "Documentation, templates, prose, and link checks"
+security = "Supply-chain and dependency advisory audits"
+writes = "Modifies generated files or installs dependencies"
+dev = "Long-running development servers and watchers"
+
+[execution]
+jobs = 1
+
+[skill]
+output = ".agents/skills/project-tools/SKILL.md"
+command = "pixi run tools"
