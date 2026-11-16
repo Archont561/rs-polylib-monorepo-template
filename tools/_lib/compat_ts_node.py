@@ -8,6 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from tools._lib.program import resolve_program
 from tools._lib.tarball_ref import tarball_ref
 
 if TYPE_CHECKING:
@@ -99,8 +100,10 @@ def _run_node_consumer(
     consumer_dir.mkdir(parents=True, exist_ok=True)
     (consumer_dir / _PACKAGE_JSON).write_text(json.dumps(manifest, indent=2) + "\n", encoding=_UTF8)
     (consumer_dir / _CHECK_MJS).write_text(script, encoding=_UTF8)
-    _run_cmd((_NPM, "install", "--no-save", "--no-audit", "--no-fund", *install_args), consumer_dir)
-    _run_cmd((_NODE, _CHECK_MJS), consumer_dir)
+    npm = resolve_program(_NPM)
+    node = resolve_program(_NODE)
+    _run_cmd((npm, "install", "--no-save", "--no-audit", "--no-fund", *install_args), consumer_dir)
+    _run_cmd((node, _CHECK_MJS), consumer_dir)
 
 
 def _node_manifest(

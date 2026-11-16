@@ -10,12 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools._lib.compat_ts_node import verify_node_consumers
+from tools._lib.program import resolve_program
 from tools._lib.tarball_ref import tarball_ref
 
 _BUN = "bun"
-_BUN_EXEC: tuple[str, ...] = (_BUN, "x", "--bun", "--no-install")
-_BUN_INSTALL_OFFLINE: tuple[str, ...] = (_BUN, "install", "--offline")
-_BUN_INSTALL: tuple[str, ...] = (_BUN, "install")
+_BUN_EXEC_ARGS: tuple[str, ...] = ("x", "--bun", "--no-install")
+_BUN_INSTALL_OFFLINE_ARGS: tuple[str, ...] = ("install", "--offline")
+_BUN_INSTALL_ARGS: tuple[str, ...] = ("install",)
 _STRICT = "--strict"
 _CHECK_FILE = "check.ts"
 _PACKAGE_JSON = "package.json"
@@ -112,6 +113,16 @@ def _run_checked(argv: tuple[str, ...], cwd: Path) -> None:
         raise RuntimeError(f"Command failed ({proc.returncode}): {' '.join(argv)}")
 
 
+def _bun_argv(*args: str) -> tuple[str, ...]:
+    """Return a Bun invocation whose program can be spawned on every platform.
+
+    `CreateProcess` on Windows does not consult `PATHEXT`, so a bare program
+    name only resolves when it is a real `.exe`. Resolving Bun first keeps the
+    call working when Bun is installed through a shim.
+    """
+    return (resolve_program(_BUN), *args)
+
+
 def _facade_consumer_source(expected_backend: str, *, include_native_subpath: bool) -> str:
     native_import = (
         f'import * as nativeApi from "{_FACADE_PKG}/native";\n' if include_native_subpath else ""
@@ -141,8 +152,7 @@ def _consumer_manifest(
 
 
 def _tsc_argv(tsc_js: Path, module: str, resolution: str) -> tuple[str, ...]:
-    return (
-        _BUN,
+    return _bun_argv(
         str(tsc_js),
         "--noEmit",
         _STRICT,
@@ -174,7 +184,7 @@ def _bun_supports_offline() -> bool:
     them without touching the network anyway.
     """
     proc = subprocess.run(
-        (_BUN, "install", "--help"),
+        _bun_argv("install", "--help"),
         capture_output=True,
         text=True,
         check=False,
@@ -184,8 +194,8 @@ def _bun_supports_offline() -> bool:
 
 def _install_argv(extra: tuple[str, ...] = ()) -> tuple[str, ...]:
     """Build the `bun install` invocation for the installed Bun version."""
-    base = _BUN_INSTALL_OFFLINE if _bun_supports_offline() else _BUN_INSTALL
-    return (*base, *extra)
+    base = _BUN_INSTALL_OFFLINE_ARGS if _bun_supports_offline() else _BUN_INSTALL_ARGS
+    return _bun_argv(*base, *extra)
 
 
 def _prepare_consumer(
@@ -208,7 +218,7 @@ def _check_consumer_runtime_and_types(
     run_types: bool,
 ) -> None:
     if run_bun:
-        _run_checked((_BUN, "run", _CHECK_FILE), consumer_dir)
+        _run_checked(_bun_argv("run", _CHECK_FILE), consumer_dir)
     if run_types:
         tsc_js = _tsc_entry(root)
         _run_checked(_tsc_argv(tsc_js, "nodenext", "nodenext"), consumer_dir)
@@ -220,14 +230,14 @@ def _pack_tarball(root: Path, spec: TsPackageSpec, tmp_path: Path, *, lint_pkg: 
     if not (pkg_dir / spec.artifact_rel).exists():
         raise RuntimeError(f"Missing compiled artifact in {spec.rel_dir}. Run `{spec.build_hint}`.")
     _run_checked(
-        (_BUN, "pm", "pack", "--cwd", spec.rel_dir, "--destination", str(tmp_path)),
+        _bun_argv("pm", "pack", "--cwd", spec.rel_dir, "--destination", str(tmp_path)),
         root,
     )
     tarball = next(tmp_path.glob(spec.tarball_glob))
     if lint_pkg:
-        _run_checked((*_BUN_EXEC, "publint", "run", str(tarball), _STRICT), pkg_dir)
+        _run_checked(_bun_argv(*_BUN_EXEC_ARGS, "publint", "run", str(tarball), _STRICT), pkg_dir)
         _run_checked(
-            (*_BUN_EXEC, "attw", str(tarball), "--profile", "esm-only", "--no-emoji"),
+            _bun_argv(*_BUN_EXEC_ARGS, "attw", str(tarball), "--profile", "esm-only", "--no-emoji"),
             pkg_dir,
         )
     return tarball
