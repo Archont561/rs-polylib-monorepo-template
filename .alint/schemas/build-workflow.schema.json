@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["name", "on", "permissions", "jobs"],
+  "properties": {
+    "on": {
+      "type": "object",
+      "required": ["workflow_call", "workflow_dispatch"]
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["contents"],
+      "properties": {
+        "contents": { "const": "read" }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "required": [
+        "build-rust",
+        "build-python-wheels",
+        "build-python-sdist",
+        "build-npm",
+        "build-uniffi-kotlin-ruby",
+        "build-uniffi-swift",
+        "build-report"
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+test_version: 1
+name: crate with Cargo.toml, README, src, and features passes layout check
+tags: [check, layout, passing]
+
+given:
+  tree:
+    crates:
+      demo:
+        Cargo.toml: "[package]\nname = \"demo\"\n"
+        README.md: "# demo\n"
+        src:
+          lib.rs: "pub fn ok() {}\n"
+        features:
+          demo.feature: "Feature: Demo\n"
+  config: |
+    version: 1
+    rules:
+      - id: require-rust-crate-layout
+        kind: dir_contains
+        select: "crates/*"
+        require:
+          - Cargo.toml
+          - README.md
+          - src
+          - features
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []

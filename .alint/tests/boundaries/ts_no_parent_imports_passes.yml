@@ -1,0 +1,26 @@
+test_version: 1
+name: packages/polylib-ts sibling relative import passes
+tags: [check, boundaries, typescript, passing]
+
+given:
+  tree:
+    packages:
+      polylib-ts:
+        src:
+          index.ts: |
+            export { normalizeSlug } from "./wasm";
+  config: |
+    version: 1
+    rules:
+      - id: boundary-ts-no-parent-traversals
+        kind: import_gate
+        language: js
+        paths: "packages/polylib-ts/src/**/*.ts"
+        forbid: "^\\.\\./"
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []

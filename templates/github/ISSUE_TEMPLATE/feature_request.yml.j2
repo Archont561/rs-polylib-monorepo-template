@@ -1,0 +1,34 @@
+# Generated from templates/github/ISSUE_TEMPLATE/feature_request.yml.j2
+# Regenerate with: pixi run tools run docs write
+name: Feature Request
+description: Propose a new library capability, conformance case, or tooling enhancement.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Target Area
+      description: Select the primary ecosystem or tooling surface.
+      options:
+{% for area in issue_areas %}
+        - "{{ area }}"
+{% endfor %}
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Describe the use case and why it belongs in the core or bindings.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API & Conformance Impact
+      description: Outline Rust, Python, and TypeScript signatures and any `conformance/*.feature` Gherkin additions.
+    validations:
+      required: true

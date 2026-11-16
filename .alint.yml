@@ -1,0 +1,628 @@
+# alint — declarative repository layout, schema, and import-boundary policy.
+# Run locally and in CI with `pixi run tools run repo alint`.
+
+version: 1
+
+extends:
+  - url: alint://bundled/oss-baseline@v1
+    except:
+      - oss-security-policy-exists
+      - oss-codeowners-exists
+      - oss-code-of-conduct-exists
+  - alint://bundled/hygiene/no-tracked-artifacts@v1
+  - alint://bundled/hygiene/lockfiles@v1
+  - alint://bundled/agent-hygiene@v1
+  - alint://bundled/agent-context@v1
+  - alint://bundled/tooling/editorconfig@v1
+  # Rust toolchain is pinned centrally in pixi.toml + pixi.lock instead of rust-toolchain.toml
+  - url: alint://bundled/rust@v1
+    except: [rust-toolchain-pinned]
+  - alint://bundled/monorepo/cargo-workspace@v1
+  - alint://bundled/ci/github-actions@v1
+
+rules:
+  # --- Required workspace roots -------------------------------------------
+  - id: require-root-files
+    kind: file_exists
+    paths:
+      - LICENSE
+      - README.md
+      - AGENTS.md
+      - Cargo.toml
+      - Cargo.lock
+      - clippy.toml
+      - deny.toml
+      - .cargo/audit.toml
+      - pyproject.toml
+      - tox.ini
+      - package.json
+      - bun.lock
+      - bunfig.toml
+      - tsconfig.base.json
+      - biome.json
+      - pixi.toml
+      - pixi.lock
+      - tasknest.toml
+      - pixi-sandbox.toml
+      - scripts/restore.sh
+      - lefthook.yml
+      - renovate.json
+      - .versionrc
+      - .codecov.yml
+      - .rumdl.toml
+      - .vale.ini
+      - lychee.toml
+      - skills-lock.json
+    level: error
+    message: "Required polyglot repository root file is missing."
+
+  - id: require-conformance-features
+    kind: dir_contains
+    select: conformance
+    require:
+      - "*.feature"
+    level: error
+    message: "Shared cross-language conformance/ directory must contain Gherkin *.feature specs."
+
+  - id: forbid-conformance-json
+    kind: file_absent
+    paths: conformance/cases.json
+    level: error
+    message: "Cross-language conformance must use Gherkin conformance/*.feature files instead of conformance/cases.json."
+
+  - id: require-policy-schemas
+    kind: dir_contains
+    select: .alint/schemas
+    require:
+      - pixi-tasks.schema.json
+      - root-package.schema.json
+      - ts-package-json.schema.json
+      - docs-app-package.schema.json
+      - ts-tsconfig.schema.json
+      - rust-workspace-cargo.schema.json
+      - rust-crate-cargo.schema.json
+      - python-package-pyproject.schema.json
+      - root-pyproject.schema.json
+      - tasknest-config.schema.json
+      - lefthook-config.schema.json
+      - pixi-sandbox-config.schema.json
+      - rumdl-config.schema.json
+      - codecov-config.schema.json
+      - github-issue-forms.schema.json
+      - github-issue-config.schema.json
+    level: error
+    message: "All repository policy JSON Schemas must exist under .alint/schemas/."
+
+  - id: require-alint-policy-tests
+    kind: dir_contains
+    select: ".alint/tests/*"
+    require: ["*.yml"]
+    level: error
+    message: "Every policy test suite under .alint/tests/* must contain *.yml specs."
+
+  - id: require-doc-templates
+    kind: dir_contains
+    select: templates
+    require:
+      - README.md.j2
+      - AGENTS.md.j2
+      - crate-readme.md.j2
+      - py-package-readme.md.j2
+      - ts-package-readme.md.j2
+    level: error
+    message: "Jinja documentation templates must exist under templates/."
+
+  - id: require-vale-microsoft-preset
+    kind: dir_contains
+    select: .vale/styles/Microsoft
+    require:
+      - meta.json
+      - "*.yml"
+    level: error
+    message: "The Microsoft Vale prose preset must be synced under .vale/styles/Microsoft/ for offline linting."
+
+  - id: require-github-templates
+    kind: dir_contains
+    select: .github/ISSUE_TEMPLATE
+    require:
+      - bug_report.yml
+      - feature_request.yml
+      - config.yml
+    level: error
+    message: "Rendered GitHub Issue Form templates must exist under .github/ISSUE_TEMPLATE/."
+
+  - id: require-github-pr-template
+    kind: file_exists
+    paths: .github/PULL_REQUEST_TEMPLATE.md
+    level: error
+    message: "Rendered .github/PULL_REQUEST_TEMPLATE.md is required."
+
+  - id: require-agent-skills
+    kind: dir_contains
+    select: .agents/skills
+    require:
+      - project-tools
+      - tasknest
+      - clean-code-principles
+      - bdd-scenarios
+      - tdd
+      - refactor
+      - grill-me
+    level: error
+    message: "Required project and agent skill directories must exist under .agents/skills/."
+
+  - id: require-agent-skill-docs
+    kind: dir_contains
+    select: ".agents/skills/*"
+    require:
+      - SKILL.md
+    level: error
+    message: "Every agent skill under .agents/skills/* must contain SKILL.md."
+
+  - id: require-backlog-layout
+    kind: dir_contains
+    select: backlog
+    require:
+      - config.yml
+      - README.md
+    level: error
+    message: "Backlog.md configuration and README must exist under backlog/."
+
+  - id: require-nested-tools-layout
+    kind: dir_contains
+    select: tools
+    require:
+      - _lib
+      - bindings
+      - docs
+      - ffi
+      - python
+      - release
+      - repo
+      - rust
+      - security
+      - ts
+      - check.py
+      - compat.py
+      - coverage.py
+      - test.py
+      - tox.py
+    level: error
+    message: "Tasknest tasks must be nested under tools/{bindings,docs,ffi,python,release,repo,rust,security,ts}/ with shared helpers in tools/_lib/."
+
+  - id: require-github-workflows
+    kind: dir_contains
+    select: .github/workflows
+    require:
+      - build.yml
+      - ci.yml
+      - pages.yml
+      - publish.yml
+      - security.yml
+      - publish-sandbox.yml
+      - relock.yml
+    level: error
+    message: "All core CI/CD, build/publish, and pixi-sandbox workflows must exist under .github/workflows/."
+
+  # Promote bundled ci/github-actions@v1 hardening rule to error on authored workflows
+  # (publish-sandbox.yml is generated by pixi-sandbox init and pushes sandbox/* branches)
+  - id: gha-workflow-contents-read
+    paths:
+      - .github/workflows/build.yml
+      - .github/workflows/ci.yml
+      - .github/workflows/pages.yml
+      - .github/workflows/publish.yml
+      - .github/workflows/security.yml
+    level: error
+
+  - id: require-build-report-template
+    kind: dir_contains
+    select: templates
+    require:
+      - build-report.md.j2
+    level: error
+    message: "Jinja2 template templates/build-report.md.j2 must exist to render report.md from report.json."
+
+  - id: schema-build-workflow
+    kind: json_schema_passes
+    paths:
+      - .github/workflows/build.yml
+    schema_path: .alint/schemas/build-workflow.schema.json
+    level: error
+    message: ".github/workflows/build.yml must be reusable (workflow_call) and include all ecosystem build jobs plus build-report."
+
+  - id: schema-publish-workflow
+    kind: json_schema_passes
+    paths:
+      - .github/workflows/publish.yml
+    schema_path: .alint/schemas/publish-workflow.schema.json
+    level: error
+    message: ".github/workflows/publish.yml must invoke build.yml, isolate every publish job in its own GitHub Environment, and grant minimal OIDC/Packages/Releases permissions."
+
+  # --- Per-unit layout contracts ------------------------------------------
+  - id: require-rust-crate-layout
+    kind: dir_contains
+    select: "crates/*"
+    require:
+      - Cargo.toml
+      - README.md
+      - src
+      - features
+    level: error
+    message: "Every Rust crate must contain Cargo.toml, README.md, src/, and features/."
+
+  - id: require-rust-crate-lib
+    kind: dir_contains
+    select: "crates/*/src"
+    require:
+      - lib.rs
+    level: error
+    message: "Every Rust crate src/ directory must contain lib.rs."
+
+  - id: require-rust-crate-features
+    kind: dir_contains
+    select: "crates/*/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "Every Rust crate features/ directory must contain at least one *.feature file."
+
+  - id: require-py-package-layout
+    kind: dir_contains
+    select: "packages/polylib-py"
+    require:
+      - pyproject.toml
+      - README.md
+      - src
+      - features
+      - tests
+    level: error
+    message: "Python binding package must include pyproject.toml, README.md, src/, features/, and tests/."
+
+  - id: require-py-package-types
+    kind: dir_contains
+    select: "packages/polylib-py/src/polylib"
+    require:
+      - __init__.py
+      - _native.pyi
+      - py.typed
+    level: error
+    message: "Python binding package source must include __init__.py, _native.pyi, and py.typed."
+
+  - id: require-py-package-features
+    kind: dir_contains
+    select: "packages/polylib-py/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "Python binding package features/ directory must contain *.feature specs."
+
+  - id: require-ts-library-layout
+    kind: dir_contains
+    select: "packages/polylib-ts"
+    require:
+      - package.json
+      - tsconfig.json
+      - bunup.config.ts
+      - README.md
+      - LICENSE
+      - src
+      - features
+      - tests
+    level: error
+    message: "TypeScript binding package must include package.json, tsconfig.json, bunup.config.ts, README.md, LICENSE, src/, features/, and tests/."
+
+  - id: require-ts-library-entry
+    kind: dir_contains
+    select: "packages/polylib-ts/src"
+    require:
+      - index.ts
+    level: error
+    message: "TypeScript binding package src/ must contain index.ts."
+
+  - id: require-ts-library-features
+    kind: dir_contains
+    select: "packages/polylib-ts/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "TypeScript binding package features/ directory must contain *.feature specs."
+
+  - id: require-wasm-library-layout
+    kind: dir_contains
+    select: "packages/polylib-wasm"
+    require:
+      - package.json
+      - tsconfig.json
+      - bunup.config.ts
+      - README.md
+      - LICENSE
+      - src
+      - features
+      - tests
+    level: error
+    message: "WebAssembly binding package must include package.json, tsconfig.json, bunup.config.ts, README.md, LICENSE, src/, features/, and tests/."
+
+  - id: require-wasm-library-entry
+    kind: dir_contains
+    select: "packages/polylib-wasm/src"
+    require:
+      - index.ts
+    level: error
+    message: "WebAssembly binding package src/ must contain index.ts."
+
+  - id: require-wasm-library-features
+    kind: dir_contains
+    select: "packages/polylib-wasm/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "WebAssembly binding package features/ directory must contain *.feature specs."
+
+  - id: require-napi-library-layout
+    kind: dir_contains
+    select: "packages/polylib-js"
+    require:
+      - package.json
+      - tsconfig.json
+      - bunup.config.ts
+      - README.md
+      - LICENSE
+      - src
+      - features
+      - tests
+    level: error
+    message: "Native NAPI-RS binding package must include package.json, tsconfig.json, bunup.config.ts, README.md, LICENSE, src/, features/, and tests/."
+
+  - id: require-napi-library-entry
+    kind: dir_contains
+    select: "packages/polylib-js/src"
+    require:
+      - index.ts
+    level: error
+    message: "Native NAPI-RS binding package src/ must contain index.ts."
+
+  - id: require-napi-library-features
+    kind: dir_contains
+    select: "packages/polylib-js/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "Native NAPI-RS binding package features/ directory must contain *.feature specs."
+
+  - id: require-kt-library-layout
+    kind: dir_contains
+    select: "packages/polylib-kt"
+    require:
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - README.md
+      - LICENSE
+      - src
+      - features
+    level: error
+    message: "Kotlin UniFFI package must include Gradle config, README.md, LICENSE, src/, and features/."
+
+  - id: require-kt-library-features
+    kind: dir_contains
+    select: "packages/polylib-kt/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "Kotlin UniFFI package features/ directory must contain *.feature specs."
+
+  - id: require-swift-library-layout
+    kind: dir_contains
+    select: "packages/polylib-swift"
+    require:
+      - Package.swift
+      - README.md
+      - LICENSE
+      - Sources
+      - Tests
+      - features
+    level: error
+    message: "Swift UniFFI package must include Package.swift, README.md, LICENSE, Sources/, Tests/, and features/."
+
+  - id: require-swift-library-features
+    kind: dir_contains
+    select: "packages/polylib-swift/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "Swift UniFFI package features/ directory must contain *.feature specs."
+
+  - id: require-rb-library-layout
+    kind: dir_contains
+    select: "packages/polylib-rb"
+    require:
+      - polylib.gemspec
+      - Gemfile
+      - Rakefile
+      - README.md
+      - LICENSE
+      - lib
+      - test
+      - conformance_steps
+      - features
+    level: error
+    message: "Ruby UniFFI gem must include gemspec, Gemfile, Rakefile, README.md, LICENSE, lib/, test/, conformance_steps/, and features/."
+
+  - id: require-rb-library-features
+    kind: dir_contains
+    select: "packages/polylib-rb/features"
+    require:
+      - "*.feature"
+    level: error
+    message: "Ruby UniFFI gem features/ directory must contain *.feature specs."
+
+  - id: require-docs-app-layout
+    kind: dir_contains
+    select: "apps/*"
+    require:
+      - package.json
+      - README.md
+    level: error
+    message: "Every app under apps/* must contain package.json and README.md."
+
+  # --- JSON Schema policy contracts (.alint/schemas/*.schema.json) --------
+  - id: pixi-only-tools-task
+    kind: json_schema_passes
+    paths: pixi.toml
+    format: toml
+    schema_path: .alint/schemas/pixi-tasks.schema.json
+    level: error
+    message: "pixi.toml must declare ONLY the single root `tools` task delegating to Tasknest."
+
+  - id: schema-root-package
+    kind: json_schema_passes
+    paths: package.json
+    format: json
+    schema_path: .alint/schemas/root-package.schema.json
+    level: error
+    message: "Root package.json must stay private ESM, declare workspaces, and define no root scripts or dependencies."
+
+  - id: schema-ts-package
+    kind: json_schema_passes
+    paths: "packages/*/package.json"
+    format: json
+    schema_path: .alint/schemas/ts-package-json.schema.json
+    level: error
+    message: "Every TypeScript workspace package.json must use @polylib/* naming, MIT license, ESM type, and explicit exports."
+
+  - id: schema-docs-app-package
+    kind: json_schema_passes
+    paths: "apps/*/package.json"
+    format: json
+    schema_path: .alint/schemas/docs-app-package.schema.json
+    level: error
+    message: "Every app package.json under apps/* must be private ESM named @polylib/app-*."
+
+  - id: schema-ts-tsconfig
+    kind: json_schema_passes
+    paths:
+      - "packages/*/tsconfig.json"
+      - "apps/*/tsconfig.json"
+    format: json
+    schema_path: .alint/schemas/ts-tsconfig.schema.json
+    level: error
+    message: "Every TS tsconfig.json must extend ../../tsconfig.base.json or @polylib/config/tsconfig.lib.json."
+
+  - id: schema-rust-workspace-cargo
+    kind: json_schema_passes
+    paths: Cargo.toml
+    format: toml
+    schema_path: .alint/schemas/rust-workspace-cargo.schema.json
+    level: error
+    message: "Root Cargo.toml must pin edition 2024, resolver 3, rust-version, MIT license, and deny/forbid unsafe_code."
+
+  - id: schema-rust-crate-cargo
+    kind: json_schema_passes
+    paths: "crates/*/Cargo.toml"
+    format: toml
+    schema_path: .alint/schemas/rust-crate-cargo.schema.json
+    level: error
+    message: "Every Rust crate Cargo.toml must inherit version, edition, rust-version, license, and lints from the workspace."
+
+  - id: schema-python-package-pyproject
+    kind: json_schema_passes
+    paths: "packages/*/pyproject.toml"
+    format: toml
+    schema_path: .alint/schemas/python-package-pyproject.schema.json
+    level: error
+    message: "Python binding package pyproject.toml must use maturin, requires-python >=3.10, and pyo3/extension-module."
+
+  - id: schema-root-pyproject
+    kind: json_schema_passes
+    paths: pyproject.toml
+    format: toml
+    schema_path: .alint/schemas/root-pyproject.schema.json
+    level: error
+    message: "Root pyproject.toml must configure Ruff, strict Mypy, pytest, and Rude CC804."
+
+  - id: schema-tasknest-config
+    kind: json_schema_passes
+    paths: tasknest.toml
+    format: toml
+    schema_path: .alint/schemas/tasknest-config.schema.json
+    level: error
+    message: "tasknest.toml must enable strict checks, required descriptions, unknown_marks = error, and project-tools skill output."
+
+  - id: schema-lefthook-config
+    kind: json_schema_passes
+    paths: lefthook.yml
+    format: yaml
+    schema_path: .alint/schemas/lefthook-config.schema.json
+    level: error
+    message: "Every lefthook.yml hook command must delegate through `pixi run [-e <env>] tools`."
+
+  - id: schema-pixi-sandbox-config
+    kind: json_schema_passes
+    paths: pixi-sandbox.toml
+    format: toml
+    schema_path: .alint/schemas/pixi-sandbox-config.schema.json
+    level: error
+    message: "pixi-sandbox.toml must declare schema = 1, cargo_vendor = true, budgets, and at least one bundle."
+
+  - id: schema-rumdl-config
+    kind: json_schema_passes
+    paths: .rumdl.toml
+    format: toml
+    schema_path: .alint/schemas/rumdl-config.schema.json
+    level: error
+    message: ".rumdl.toml must enforce GFM flavor, dash list markers, and asterisk emphasis/strong markers."
+
+  - id: schema-codecov-config
+    kind: json_schema_passes
+    paths: .codecov.yml
+    format: yaml
+    schema_path: .alint/schemas/codecov-config.schema.json
+    level: error
+    message: ".codecov.yml must declare per-language flags and a 90% target for rust, python, ts, kotlin, ruby, and swift."
+
+  - id: schema-github-issue-forms
+    kind: json_schema_passes
+    paths:
+      - .github/ISSUE_TEMPLATE/bug_report.yml
+      - .github/ISSUE_TEMPLATE/feature_request.yml
+    format: yaml
+    schema_path: .alint/schemas/github-issue-forms.schema.json
+    level: error
+    message: "GitHub Issue Forms must define name, description, and body."
+
+  - id: schema-github-issue-config
+    kind: json_schema_passes
+    paths: .github/ISSUE_TEMPLATE/config.yml
+    format: yaml
+    schema_path: .alint/schemas/github-issue-config.schema.json
+    level: error
+    message: ".github/ISSUE_TEMPLATE/config.yml must disable blank issues."
+
+  # --- Architecture & import boundary gates -------------------------------
+  - id: boundary-rust-core-no-bindings
+    kind: import_gate
+    language: rust
+    paths: "crates/polylib-core/src/**/*.rs"
+    forbid: "^(pyo3|wasm_bindgen|js_sys|web_sys|napi|napi_derive|uniffi|polylib_py|polylib_wasm|polylib_js|polylib_ffi)"
+    level: error
+    message: "crates/polylib-core must remain pure Rust with zero PyO3, WebAssembly, NAPI-RS, or UniFFI imports."
+
+  - id: boundary-rust-metacrate-no-bindings
+    kind: import_gate
+    language: rust
+    paths: "crates/polylib/src/**/*.rs"
+    forbid: "^(pyo3|wasm_bindgen|js_sys|web_sys|napi|napi_derive|uniffi|polylib_py|polylib_wasm|polylib_js|polylib_ffi)"
+    level: error
+    message: "crates/polylib public metacrate must not import PyO3, WebAssembly, NAPI-RS, or UniFFI binding crates."
+
+  - id: boundary-ts-no-parent-traversals
+    kind: import_gate
+    language: js
+    paths:
+      - "packages/polylib-ts/src/**/*.ts"
+      - "packages/polylib-wasm/src/**/*.ts"
+      - "packages/polylib-js/src/**/*.ts"
+    forbid: "^\\.\\./"
+    level: error
+    message: "TypeScript library source must avoid parent relative imports (`../`)."

@@ -1,0 +1,34 @@
+<!--
+  Generated file — do not edit PULL_REQUEST_TEMPLATE.md by hand.
+
+  Source template : templates/github/PULL_REQUEST_TEMPLATE.md.j2
+  Regenerate with : pixi run tools run docs write
+-->
+
+# Pull Request
+
+## Summary
+
+- What changed and why?
+
+## Affected Ecosystems
+
+{% for crate in rust_crates -%}
+- [ ] Rust crate `crates/{{ crate }}`
+{% endfor -%}
+{% for pkg in python_packages -%}
+- [ ] Python package `packages/{{ pkg }}-py`
+{% endfor -%}
+{% for pkg in ts_packages -%}
+- [ ] TypeScript package `{{ pkg }}`
+{% endfor -%}
+- [ ] Conformance specifications (`conformance/*.feature`)
+- [ ] Tooling, policy, CI, or documentation
+
+## Verification Checklist
+
+- [ ] `pixi run -e full tools check` and `pixi run -e full tools skill --check`
+- [ ] `pixi run -e full tools run check` (alint, policy tests, docs, formatting, linters)
+- [ ] `pixi run -e full tools run test` (Rust, Python, TypeScript, conformance)
+- [ ] `pixi run -e full tools run rust compat`, `python compat`, and `ts compat`
+- [ ] Updated `templates/` and ran `docs write` if docs or GitHub templates changed

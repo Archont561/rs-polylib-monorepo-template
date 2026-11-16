@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["extends"],
+  "properties": {
+    "extends": {
+      "type": "string",
+      "pattern": "^(\\.\\./\\.\\./tsconfig\\.base\\.json|\\.\\./config/tsconfig\\.lib\\.json|@polylib/config/tsconfig\\.lib\\.json)$"
+    }
+  }
+}
