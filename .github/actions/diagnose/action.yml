@@ -1,0 +1,35 @@
+name: "Diagnose"
+description: "Run a command and echo the tail of its output as a GitHub annotation when it fails."
+
+inputs:
+  label:
+    description: "Short label describing the command under test."
+    required: true
+  command:
+    description: "Command to execute."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run command and report failures as annotations
+      shell: bash
+      env:
+        DIAG_LABEL: ${{ inputs.label }}
+        DIAG_COMMAND: ${{ inputs.command }}
+      run: |
+        set +e
+        log="$(mktemp)"
+        bash -c "$DIAG_COMMAND" >"$log" 2>&1
+        status=$?
+        cat "$log"
+        if [ "$status" -ne 0 ]; then
+          echo "::group::Diagnostic output for $DIAG_LABEL"
+          tail -n 60 "$log"
+          echo "::endgroup::"
+          tail -n 40 "$log" | tr -d '\r' | while IFS= read -r line; do
+            echo "::error title=$DIAG_LABEL failed::$line"
+          done
+        fi
+        rm -f "$log"
+        exit "$status"
