@@ -41,12 +41,12 @@ runs:
           # the lines that immediately follow them, because a parser error
           # usually spells out the reason on the next line.
           {
-            grep -n -A 6 -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal|exception|traceback)' "$log" \
-              || head -n 12 "$log"
-            echo '--- context ---'
-            head -n 6 "$log"
             echo '--- tail ---'
-            tail -n 12 "$log"
+            tail -n 20 "$log"
+            echo '--- errors ---'
+            grep -n -A 4 -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal|exception|traceback)' "$log" \
+              | grep -v 'test result: ok' \
+              || head -n 12 "$log"
           } \
             | tr '\r' '\n' \
             | grep -v '^$' \
