@@ -472,11 +472,15 @@ jobs:
           name: coverage-ruby
           fail_ci_if_error: false
 
-      - name: Verify Kotlin JAR, Ruby isolated gem, and Swift C-ABI compatibility
+      # Swift is verified by the dedicated `swift-versions` job on macOS and
+      # Linux; this job covers the Kotlin and Ruby targets only.
+      - name: Verify Kotlin JAR and Ruby isolated gem compatibility
         uses: ./.github/actions/diagnose
         with:
-          label: "ffi compat"
-          command: pixi run -e ffi tools run ffi compat
+          label: "ffi compat (kotlin, ruby)"
+          command: |
+            pixi run -e ffi tools run ffi compat --target kotlin
+            pixi run -e ffi tools run ffi compat --target ruby
 
       - name: Stage Kotlin JAR + runtime classpath and Ruby gem for version matrices
         run: |
