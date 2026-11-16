@@ -271,6 +271,19 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # Only the Python surface can break the Python matrix: the Python binding
+    # crate, the Python package, and the shared core they both build on.
+    paths:
+      - "crates/polylib-core/**"
+      - "crates/polylib-py/**"
+      - "packages/polylib-py/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "pyproject.toml"
+      - "tox.ini"
+      - "pixi.toml"
+      - "pixi.lock"
     strategy:
       fail-fast: false
       matrix:
@@ -314,6 +327,22 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The Node.js runtime only exercises the TypeScript facade, the native
+    # NAPI addon, and the WebAssembly fallback, so those are the inputs that
+    # can change the result.
+    paths:
+      - "crates/polylib-core/**"
+      - "crates/polylib-js/**"
+      - "crates/polylib-wasm/**"
+      - "packages/polylib-js/**"
+      - "packages/polylib-ts/**"
+      - "packages/polylib-wasm/**"
+      - "packages/config/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
     strategy:
       fail-fast: false
       matrix:
@@ -404,6 +433,21 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Bun loads the same facade, native addon, and WebAssembly fallback as
+    # Node.js, so it reacts to exactly the same inputs.
+    paths:
+      - "crates/polylib-core/**"
+      - "crates/polylib-js/**"
+      - "crates/polylib-wasm/**"
+      - "packages/polylib-js/**"
+      - "packages/polylib-ts/**"
+      - "packages/polylib-wasm/**"
+      - "packages/config/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
     strategy:
       fail-fast: false
       matrix:
@@ -608,6 +652,15 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The JDK matrix loads the Kotlin artifact built from the UniFFI crate, so
+    # it reacts to that crate, the Kotlin package, and the shared core.
+    paths:
+      - "crates/polylib-core/**"
+      - "crates/polylib-ffi/**"
+      - "packages/polylib-kt/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
     strategy:
       fail-fast: false
       matrix:
@@ -658,6 +711,15 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The Ruby matrix loads the gem built from the same UniFFI crate as the
+    # Kotlin artifact, so it reacts to the same inputs.
+    paths:
+      - "crates/polylib-core/**"
+      - "crates/polylib-ffi/**"
+      - "packages/polylib-rb/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
     strategy:
       fail-fast: false
       matrix:
@@ -691,6 +753,15 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    # The Swift package is generated from the UniFFI crate, so the Swift matrix
+    # reacts to that crate, the Swift package, and the shared core.
+    paths:
+      - "crates/polylib-core/**"
+      - "crates/polylib-ffi/**"
+      - "packages/polylib-swift/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
     strategy:
       fail-fast: false
       matrix:
@@ -750,6 +821,17 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
+    # This matrix builds and exercises every binding on a second operating
+    # system, so it reacts to every binding crate and package.
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "conformance/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
+      - "pyproject.toml"
     strategy:
       fail-fast: false
       matrix:
@@ -809,23 +891,22 @@ jobs:
     steps:
       - name: Verify all CI jobs succeeded
         env:
-          # A push to main skips the version matrices, so their results are
-          # `skipped` rather than `success`. On a pull request every job must
-          # have run and passed.
-          EVENT_NAME: ${{ github.event_name }}
+          # A job that was skipped on purpose reports `skipped` rather than
+          # `success`. That happens in two cases:
+          #
+          #   - a push to main, where the version matrices are not repeated;
+          #   - a pull request that did not touch the ecosystem a matrix
+          #     covers, where the matrix is skipped by its own path filter.
+          #
+          # Both are intentional, so `skipped` passes. A real failure or a
+          # cancellation is never acceptable and fails the gate.
+          RESULTS: ${{ join(needs.*.result, ',') }}
         run: |
-          statuses="${{ join(needs.*.result, ',') }}"
+          statuses="$RESULTS"
           echo "Job results: $statuses"
           for s in $(echo "$statuses" | tr ',' ' '); do
             case "$s" in
-              success)
-                ;;
-              skipped)
-                if [ "$EVENT_NAME" = "push" ]; then
-                  continue
-                fi
-                echo "CI gate failed: job was skipped"
-                exit 1
+              success|skipped)
                 ;;
               *)
                 echo "CI gate failed: detected status '$s'"
