@@ -14,6 +14,7 @@ from tools._lib.compat_ts_node import verify_node_consumers
 _BUN = "bun"
 _BUN_EXEC: tuple[str, ...] = (_BUN, "x", "--bun", "--no-install")
 _BUN_INSTALL_OFFLINE: tuple[str, ...] = (_BUN, "install", "--offline")
+_BUN_INSTALL: tuple[str, ...] = (_BUN, "install")
 _STRICT = "--strict"
 _CHECK_FILE = "check.ts"
 _PACKAGE_JSON = "package.json"
@@ -152,6 +153,40 @@ def _tsc_argv(tsc_js: Path, module: str, resolution: str) -> tuple[str, ...]:
     )
 
 
+def _tsc_entry(root: Path) -> Path:
+    """Return the TypeScript compiler entry point that runs on every platform.
+
+    `node_modules/typescript/bin/tsc` is a POSIX shell wrapper and cannot be
+    executed on Windows. `lib/tsc.js` is plain JavaScript and works everywhere.
+    """
+    lib_entry = root / "node_modules" / "typescript" / "lib" / "tsc.js"
+    if lib_entry.is_file():
+        return lib_entry
+    return root / "node_modules" / "typescript" / "bin" / "tsc"
+
+
+def _bun_supports_offline() -> bool:
+    """Report whether the installed Bun understands `bun install --offline`.
+
+    The flag only exists from Bun 1.4.1 onwards. Every dependency in the
+    consumer fixtures is a local `file:` tarball, so the older releases install
+    them without touching the network anyway.
+    """
+    proc = subprocess.run(
+        (_BUN, "install", "--help"),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return "--offline" in (proc.stdout + proc.stderr)
+
+
+def _install_argv(extra: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Build the `bun install` invocation for the installed Bun version."""
+    base = _BUN_INSTALL_OFFLINE if _bun_supports_offline() else _BUN_INSTALL
+    return (*base, *extra)
+
+
 def _prepare_consumer(
     consumer_dir: Path,
     manifest: dict[str, object],
@@ -174,7 +209,7 @@ def _check_consumer_runtime_and_types(
     if run_bun:
         _run_checked((_BUN, "run", _CHECK_FILE), consumer_dir)
     if run_types:
-        tsc_js = root / "node_modules" / "typescript" / "bin" / "tsc"
+        tsc_js = _tsc_entry(root)
         _run_checked(_tsc_argv(tsc_js, "nodenext", "nodenext"), consumer_dir)
         _run_checked(_tsc_argv(tsc_js, "esnext", "bundler"), consumer_dir)
 
@@ -207,13 +242,13 @@ def _backend_cases(
             "consumer-wasm",
             _consumer_manifest("consumer-wasm", {_WASM_PKG: wasm_ref}),
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_WASM_PKG, version_fn="getWasmVersion"),
-            _BUN_INSTALL_OFFLINE,
+            _install_argv(),
         ),
         (
             "consumer-js",
             _consumer_manifest("consumer-js", {_JS_PKG: js_ref}),
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_JS_PKG, version_fn="getNativeVersion"),
-            _BUN_INSTALL_OFFLINE,
+            _install_argv(),
         ),
     )
 
@@ -233,7 +268,7 @@ def _facade_cases(
                 overrides={_WASM_PKG: wasm_ref, _JS_PKG: js_ref},
             ),
             _facade_consumer_source("native", include_native_subpath=True),
-            _BUN_INSTALL_OFFLINE,
+            _install_argv(),
         ),
         (
             "consumer-facade-wasm-fallback",
@@ -243,7 +278,7 @@ def _facade_cases(
                 overrides={_WASM_PKG: wasm_ref},
             ),
             _facade_consumer_source("wasm", include_native_subpath=False),
-            (*_BUN_INSTALL_OFFLINE, "--omit=optional"),
+            _install_argv(("--omit=optional",)),
         ),
     )
 
