@@ -37,7 +37,10 @@ jobs:
           pixi run -e full tools skill --check
 
       - name: Run offline policy, docs, formatting, and linter gates
-        run: pixi run -e full tools run check
+        uses: ./.github/actions/diagnose
+        with:
+          label: "repository quality gates"
+          command: pixi run -e full tools run check
 
   rust:
     name: Rust (Clippy, Tests, Deny, Compat)
@@ -267,28 +270,21 @@ jobs:
           ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
           mkdir -p /tmp/node-consumer-native /tmp/node-consumer-wasm
           cd /tmp/node-consumer-native
-          POLYLIB_WASM_TGZ=${wasm_files[0]} \
-          POLYLIB_JS_TGZ=${js_files[0]} \
-          POLYLIB_TS_TGZ=${ts_files[0]}
-          node -e '
-            const fs = require("node:fs");
-            const wasm = process.env.POLYLIB_WASM_TGZ;
-            const js = process.env.POLYLIB_JS_TGZ;
-            const ts = process.env.POLYLIB_TS_TGZ;
-            fs.writeFileSync("package.json", JSON.stringify({
-              name: "node-consumer-native",
-              type: "module",
-              dependencies: {
-                "@polylib/polylib": "file:" + ts,
-                "@polylib/polylib-wasm": "file:" + wasm,
-                "@polylib/polylib-js": "file:" + js
-              },
-              overrides: {
-                "@polylib/polylib-wasm": "file:" + wasm,
-                "@polylib/polylib-js": "file:" + js
-              }
-            }, null, 2));
-          '
+          cat > package.json <<JSON
+          {
+            "name": "node-consumer-native",
+            "type": "module",
+            "dependencies": {
+              "@polylib/polylib": "file:${ts_files[0]}",
+              "@polylib/polylib-wasm": "file:${wasm_files[0]}",
+              "@polylib/polylib-js": "file:${js_files[0]}"
+            },
+            "overrides": {
+              "@polylib/polylib-wasm": "file:${wasm_files[0]}",
+              "@polylib/polylib-js": "file:${js_files[0]}"
+            }
+          }
+          JSON
           npm install --no-save --no-audit --no-fund
           node --input-type=module -e '
             import { createRequire } from "node:module";
@@ -307,24 +303,19 @@ jobs:
             if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
           '
           cd /tmp/node-consumer-wasm
-          POLYLIB_WASM_TGZ=${wasm_files[0]} \
-          POLYLIB_TS_TGZ=${ts_files[0]}
-          node -e '
-            const fs = require("node:fs");
-            const wasm = process.env.POLYLIB_WASM_TGZ;
-            const ts = process.env.POLYLIB_TS_TGZ;
-            fs.writeFileSync("package.json", JSON.stringify({
-              name: "node-consumer-wasm",
-              type: "module",
-              dependencies: {
-                "@polylib/polylib": "file:" + ts,
-                "@polylib/polylib-wasm": "file:" + wasm
-              },
-              overrides: {
-                "@polylib/polylib-wasm": "file:" + wasm
-              }
-            }, null, 2));
-          '
+          cat > package.json <<JSON
+          {
+            "name": "node-consumer-wasm",
+            "type": "module",
+            "dependencies": {
+              "@polylib/polylib": "file:${ts_files[0]}",
+              "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+            },
+            "overrides": {
+              "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+            }
+          }
+          JSON
           npm install --no-save --omit=optional --no-audit --no-fund
           node --input-type=module -e '
             import * as facade from "@polylib/polylib";
@@ -367,27 +358,24 @@ jobs:
             ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
             mkdir -p /tmp/bun-consumer-native /tmp/bun-consumer-wasm
             cd /tmp/bun-consumer-native
-            POLYLIB_WASM_TGZ=${wasm_files[0]} \
-            POLYLIB_JS_TGZ=${js_files[0]} \
-            POLYLIB_TS_TGZ=${ts_files[0]}
-            bun -e '
-              const wasm = process.env.POLYLIB_WASM_TGZ;
-              const js = process.env.POLYLIB_JS_TGZ;
-              const ts = process.env.POLYLIB_TS_TGZ;
-              await Bun.write("package.json", JSON.stringify({
-                name: "bun-consumer-native",
-                type: "module",
-                dependencies: {
-                  "@polylib/polylib": "file:" + ts,
-                  "@polylib/polylib-wasm": "file:" + wasm,
-                  "@polylib/polylib-js": "file:" + js
-                },
-                overrides: {
-                  "@polylib/polylib-wasm": "file:" + wasm,
-                  "@polylib/polylib-js": "file:" + js
-                }
-              }, null, 2));
-            '
+            # The manifest is written by the shell rather than by Bun: `bun -e`
+            # only gained top-level await later, and `process.argv` differs
+            # between Bun releases, so neither is portable across the matrix.
+            cat > package.json <<JSON
+            {
+              "name": "bun-consumer-native",
+              "type": "module",
+              "dependencies": {
+                "@polylib/polylib": "file:${ts_files[0]}",
+                "@polylib/polylib-wasm": "file:${wasm_files[0]}",
+                "@polylib/polylib-js": "file:${js_files[0]}"
+              },
+              "overrides": {
+                "@polylib/polylib-wasm": "file:${wasm_files[0]}",
+                "@polylib/polylib-js": "file:${js_files[0]}"
+              }
+            }
+            JSON
             # `bun install --offline` only exists from Bun 1.4.1 onwards; every
             # dependency here is a local `file:` tarball, so the older Bun
             # releases install them without touching the network anyway.
@@ -410,23 +398,19 @@ jobs:
               if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
             '
             cd /tmp/bun-consumer-wasm
-            POLYLIB_WASM_TGZ=${wasm_files[0]} \
-            POLYLIB_TS_TGZ=${ts_files[0]}
-            bun -e '
-              const wasm = process.env.POLYLIB_WASM_TGZ;
-              const ts = process.env.POLYLIB_TS_TGZ;
-              await Bun.write("package.json", JSON.stringify({
-                name: "bun-consumer-wasm",
-                type: "module",
-                dependencies: {
-                  "@polylib/polylib": "file:" + ts,
-                  "@polylib/polylib-wasm": "file:" + wasm
-                },
-                overrides: {
-                  "@polylib/polylib-wasm": "file:" + wasm
-                }
-              }, null, 2));
-            '
+            cat > package.json <<JSON
+            {
+              "name": "bun-consumer-wasm",
+              "type": "module",
+              "dependencies": {
+                "@polylib/polylib": "file:${ts_files[0]}",
+                "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+              },
+              "overrides": {
+                "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+              }
+            }
+            JSON
             if bun install --help 2>&1 | grep -q -- '--offline'; then
               bun install --offline --omit=optional
             else
@@ -696,10 +680,6 @@ jobs:
         with:
           label: "cross-os polyglot suites"
           command: |
-            # Report how the Python package is resolved before running the
-            # suites: a wrong module path is otherwise reported only as a
-            # pytest collection error.
-            pixi run -e full python -c "import os, sys; print('PYTHONPATH=', os.environ.get('PYTHONPATH')); print('sys.path=', sys.path); import polylib; print('polylib from', polylib.__file__)"
             pixi run -e full tools run test
             pixi run -e full tools run rust compat
             pixi run -e full tools run python compat
