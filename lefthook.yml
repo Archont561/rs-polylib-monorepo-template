@@ -1,0 +1,92 @@
+# Lefthook v2 Git hooks — all checks route through `pixi run [-e <env>] tools`.
+# Install locally with: `pixi run tools run repo hooks`
+
+commit-msg:
+  jobs:
+    - name: convco
+      run: pixi run -e lint tools run repo commit_msg --message-file {1}
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: alint
+      run: pixi run -e lint tools run repo alint
+
+    - name: test-policy
+      glob: "{.alint.yml,.alint/**}"
+      run: pixi run -e lint tools run repo policy
+
+    - name: tasknest-sync
+      glob: "{tasknest.toml,tools/**,.agents/skills/project-tools/SKILL.md}"
+      group:
+        piped: true
+        jobs:
+          - name: tasknest-check
+            run: pixi run tools check
+          - name: tasknest-skill-check
+            run: pixi run tools skill --check
+
+    - name: docs-sync
+      glob: "{templates/**,README.md,AGENTS.md,.github/ISSUE_TEMPLATE/**,.github/PULL_REQUEST_TEMPLATE.md,Cargo.toml,packages/*/pyproject.toml,packages/*/package.json,packages/*/build.gradle.kts,packages/*/Package.swift,packages/*/polylib.gemspec,apps/*/package.json}"
+      run: pixi run tools run docs check
+
+    - name: pixi-sandbox-plan
+      glob: "pixi-sandbox.toml"
+      run: pixi run tools run repo sandbox
+
+    - name: lint-py
+      glob: "{packages/polylib-py/**/*.py,packages/polylib-py/**/*.pyi,tools/**/*.py,pyproject.toml}"
+      run: pixi run -e py tools run python lint
+
+    - name: lint-ts
+      glob: "**/*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}"
+      run: pixi run -e js tools run ts lint --no-typecheck
+
+    - name: lint-md
+      glob: "**/*.{md,mdx}"
+      run: pixi run -e docs tools run docs md
+
+    - name: lint-gherkin
+      glob: "**/*.feature"
+      run: pixi run -e lint tools run repo gherkin
+
+    - name: lint-links
+      glob: "**/*.{md,mdx}"
+      run: pixi run -e docs tools run docs links
+
+    - name: lint-prose
+      glob: "{README.md,AGENTS.md,apps/docs/content/docs/index.mdx}"
+      run: pixi run -e docs tools run docs prose
+
+    - name: lint-actions
+      glob: ".github/workflows/*.yml"
+      run: pixi run -e lint tools run repo actions
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: rust-checks
+      glob: "{Cargo.toml,Cargo.lock,clippy.toml,deny.toml,crates/**,conformance/**}"
+      group:
+        piped: true
+        jobs:
+          - name: lint-rs
+            run: pixi run -e rust tools run rust lint
+          - name: test-rs
+            run: pixi run -e rust tools run rust test
+          - name: deny-rs
+            run: pixi run -e rust tools run security deny_rs
+
+    - name: python-tests
+      glob: "{packages/polylib-py/**,crates/polylib-py/**,conformance/**,pyproject.toml}"
+      run: pixi run -e full tools run python test
+
+    - name: ts-checks
+      glob: "{packages/polylib-ts/**,packages/polylib-wasm/**,packages/polylib-js/**,packages/config/**,crates/polylib-wasm/**,crates/polylib-js/**,conformance/**,package.json,bun.lock}"
+      group:
+        piped: true
+        jobs:
+          - name: lint-ts
+            run: pixi run -e js tools run ts lint
+          - name: test-ts
+            run: pixi run -e js tools run ts test
