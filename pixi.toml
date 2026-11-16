@@ -52,7 +52,7 @@ PYTHONPATH = "$PIXI_PROJECT_ROOT/packages/polylib-py/src"
 # as literal text. Override the value for win-64 so the Python package stays
 # importable there.
 [feature.py.target.win-64.activation.env]
-PYTHONPATH = "%PIXI_PROJECT_ROOT%/packages/polylib-py/src"
+PYTHONPATH = "%PIXI_PROJECT_ROOT%\\packages\\polylib-py\\src"
 
 [feature.lint.dependencies]
 actionlint = ">=1.7,<2"
