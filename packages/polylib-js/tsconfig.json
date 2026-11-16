@@ -1,0 +1,10 @@
+{
+  "extends": "../config/tsconfig.lib.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["src", "tests", "package.json", "bunup.config.ts"]
+}

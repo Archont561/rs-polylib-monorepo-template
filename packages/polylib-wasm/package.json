@@ -1,0 +1,57 @@
+{
+  "name": "@polylib/polylib-wasm",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "type": "module",
+  "description": "WebAssembly TypeScript library powered by polylib-core via wasm-bindgen.",
+  "homepage": "https://github.com/your-org/polyglot-lib-template#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/polyglot-lib-template.git",
+    "directory": "packages/polylib-wasm"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/polyglot-lib-template/issues"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "dev": "bunup --watch",
+    "build": "bunup",
+    "prepack": "bun run build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@aboviq/bun-test-cucumber": "0.2.0",
+    "@archont561/bun-test-utils": "0.2.0",
+    "@arethetypeswrong/cli": "0.18.5",
+    "bunup": "0.16.32",
+    "fast-check": "4.10.2",
+    "publint": "0.3.25"
+  }
+}

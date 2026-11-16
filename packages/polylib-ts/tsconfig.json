@@ -1,0 +1,12 @@
+{
+  "extends": "../config/tsconfig.lib.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "paths": {
+      "@/*": ["./*"],
+      "@polylib/polylib-js": ["../polylib-js/src/index.ts"],
+      "@polylib/polylib-wasm": ["../polylib-wasm/src/index.ts"]
+    }
+  },
+  "include": ["src", "tests", "package.json", "bunup.config.ts"]
+}
