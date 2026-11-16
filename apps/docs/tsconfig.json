@@ -3,8 +3,9 @@
   "compilerOptions": {
     "jsx": "preserve",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*"],
+      "@/.source/*": ["./.source/*"]
     }
   },
-  "include": ["src", "content", "source.config.ts"]
+  "include": ["src", "content", "source.config.ts", "mdx-components.tsx"]
 }
