@@ -367,7 +367,14 @@ jobs:
               }
             }, null, 2));
           ' "${wasm_files[0]}" "${js_files[0]}" "${ts_files[0]}"
-          bun install --offline
+          # `bun install --offline` only exists from Bun 1.4.1 onwards; every
+          # dependency here is a local `file:` tarball, so the older Bun
+          # releases install them without touching the network anyway.
+          if bun install --help 2>&1 | grep -q -- '--offline'; then
+            bun install --offline
+          else
+            bun install
+          fi
           bun -e '
             import * as facade from "@polylib/polylib";
             import * as facadeWasm from "@polylib/polylib/wasm";
@@ -396,7 +403,11 @@ jobs:
               }
             }, null, 2));
           ' "${wasm_files[0]}" "${ts_files[0]}"
-          bun install --offline --omit=optional
+          if bun install --help 2>&1 | grep -q -- '--offline'; then
+            bun install --offline --omit=optional
+          else
+            bun install --omit=optional
+          fi
           bun -e '
             import * as facade from "@polylib/polylib";
             if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
