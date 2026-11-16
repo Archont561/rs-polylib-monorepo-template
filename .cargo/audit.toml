@@ -1,6 +1,11 @@
 # cargo-audit configuration (RustSec advisories)
 [advisories]
-ignore = []
+# RUSTSEC-2026-0374: `basic-toml` is unmaintained (informational, not a
+# vulnerability) and has no patched release. It is pulled in transitively by
+# `uniffi_bindgen` -> `askama` -> `askama_derive`, which is a build-time only
+# dependency of the UniFFI code generator and is never linked into the
+# published `polylib-core` library or any of its bindings.
+ignore = ["RUSTSEC-2026-0374"]
 informational_warnings = ["unmaintained", "unsound", "yanked"]
 
 [output]
