@@ -5,6 +5,14 @@ name: publish sandbox
 on:
   push:
     branches: [main]
+    paths:
+      - Cargo.lock
+      - Cargo.toml
+      - bun.lock
+      - package.json
+      - pixi-sandbox.toml
+      - pixi.lock
+      - pixi.toml
   # A bare `schedule:` run and a `workflow_dispatch` naming `upgrade` both route to the
   # `upgrade` job below instead of an ordinary publish — see that job's `if:` and its
   # neighbours'. Leaving `upgrade` blank on a manual dispatch keeps today's behaviour exactly.
@@ -20,7 +28,7 @@ on:
         default: ""
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: "publish-sandbox-${{ github.repository }}"
@@ -73,6 +81,8 @@ jobs:
 
   publish:
     needs: plan
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       # `include:` nested under `matrix:`, not `matrix:` itself. `plan --json` emits

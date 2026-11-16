@@ -1,12 +1,15 @@
 name: Build
 
+# The build produces release artifacts (report.json, report.md, SHA256SUMS.txt)
+# and the packaged bundles that `publish.yml` releases. It therefore runs on main
+# and on a release tag, not on every pull request: `ci.yml` already proves the
+# commit compiles, and the artifacts have no consumer on a pull request.
 on:
   push:
     branches:
       - main
     tags:
       - "v*.*.*"
-  pull_request:
   workflow_dispatch:
   workflow_call:
 

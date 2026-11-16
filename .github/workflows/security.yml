@@ -1,10 +1,45 @@
 name: Security
 
+# The audits read the dependency manifests and the source, so a change that
+# touches none of them cannot change their result. The paths below keep a
+# documentation-only pull request from spending a runner on an audit that would
+# produce the same output. The weekly schedule covers the repository as a whole
+# regardless of what changed.
 on:
   push:
     branches:
       - main
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "apps/**"
+      - "tools/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
+      - "pyproject.toml"
+      - "pixi.toml"
+      - "pixi.lock"
+      - "deny.toml"
+      - ".cargo/audit.toml"
+      - ".github/workflows/security.yml"
   pull_request:
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "apps/**"
+      - "tools/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
+      - "pyproject.toml"
+      - "pixi.toml"
+      - "pixi.lock"
+      - "deny.toml"
+      - ".cargo/audit.toml"
+      - ".github/workflows/security.yml"
   schedule:
     # Weekly automated advisory sweep (Mondays 05:00 UTC)
     - cron: "0 5 * * 1"
