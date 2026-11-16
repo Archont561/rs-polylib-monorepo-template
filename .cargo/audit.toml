@@ -1,12 +1,12 @@
 # cargo-audit configuration (RustSec advisories)
+#
+# Kept deliberately small: cargo-audit rejects any key it does not know, and
+# the audit is already invoked with `--deny warnings` by
+# `tools/security/audit_rs.py`.
 [advisories]
-# RUSTSEC-2026-0374: `basic-toml` is unmaintained (informational, not a
-# vulnerability) and has no patched release. It is pulled in transitively by
-# `uniffi_bindgen` -> `askama` -> `askama_derive`, which is a build-time only
-# dependency of the UniFFI code generator and is never linked into the
-# published `polylib-core` library or any of its bindings.
+# RUSTSEC-2026-0374: `basic-toml` is unmaintained. It is an informational
+# advisory, not a vulnerability, and no patched release exists. It reaches the
+# dependency graph only through `uniffi_bindgen` -> `askama` -> `askama_derive`,
+# a build-time-only dependency of the UniFFI code generator that is never
+# linked into the published `polylib-core` library or any of its bindings.
 ignore = ["RUSTSEC-2026-0374"]
-informational_warnings = ["unmaintained", "unsound", "yanked"]
-
-[output]
-deny = ["warnings"]

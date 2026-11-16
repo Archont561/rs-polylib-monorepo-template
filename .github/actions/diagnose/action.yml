@@ -37,10 +37,11 @@ runs:
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
           # GitHub parses each workflow annotation from a single line and keeps
-          # only a handful per step, so pick the lines that name the problem:
-          # the error lines first, then the head of the output.
+          # only a handful per step. Emit the lines that name the problem and
+          # the lines that immediately follow them, because a parser error
+          # usually spells out the reason on the next line.
           {
-            grep -n -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal)' "$log" \
+            grep -n -A 4 -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal)' "$log" \
               || head -n 12 "$log"
             echo '--- context ---'
             head -n 12 "$log"
