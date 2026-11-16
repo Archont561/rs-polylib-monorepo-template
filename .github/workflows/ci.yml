@@ -675,15 +675,29 @@ jobs:
         with:
           cache-key: ci-cross-os-${{ matrix.os }}
 
-      - name: Run full polyglot test and compatibility suites
+      - name: Run polyglot test suites
         uses: ./.github/actions/diagnose
         with:
-          label: "cross-os polyglot suites"
-          command: |
-            pixi run -e full tools run test
-            pixi run -e full tools run rust compat
-            pixi run -e full tools run python compat
-            pixi run -e full tools run ts compat
+          label: "cross-os polyglot tests"
+          command: pixi run -e full tools run test
+
+      - name: Run Rust compatibility suites
+        uses: ./.github/actions/diagnose
+        with:
+          label: "cross-os rust compat"
+          command: pixi run -e full tools run rust compat
+
+      - name: Run Python compatibility suites
+        uses: ./.github/actions/diagnose
+        with:
+          label: "cross-os python compat"
+          command: pixi run -e full tools run python compat
+
+      - name: Run TypeScript compatibility suites
+        uses: ./.github/actions/diagnose
+        with:
+          label: "cross-os ts compat"
+          command: pixi run -e full tools run ts compat
 
   ci-gate:
     name: CI Required Gate
