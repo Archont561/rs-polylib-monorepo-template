@@ -1,0 +1,154 @@
+{
+  "ci": {
+    "rust": [
+      "crates/**",
+      "conformance/**",
+      "Cargo.toml",
+      "Cargo.lock",
+      "clippy.toml",
+      "deny.toml",
+      ".cargo/**",
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/scripts/**",
+      "scripts/**",
+      "tools/**",
+      "pixi.toml",
+      "pixi.lock"
+    ],
+    "python": [
+      "crates/polylib-py/**",
+      "crates/polylib-core/**",
+      "packages/polylib-py/**",
+      "conformance/**",
+      "pyproject.toml",
+      "tox.ini",
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/scripts/**",
+      "scripts/**",
+      "tools/**",
+      "pixi.toml",
+      "pixi.lock"
+    ],
+    "js": [
+      "crates/polylib-js/**",
+      "crates/polylib-wasm/**",
+      "crates/polylib-core/**",
+      "packages/polylib-js/**",
+      "packages/polylib-ts/**",
+      "packages/polylib-wasm/**",
+      "packages/config/**",
+      "package.json",
+      "bun.lock",
+      "bunfig.toml",
+      "biome.json",
+      "tsconfig.base.json",
+      "conformance/**",
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/scripts/**",
+      "scripts/**",
+      "tools/**",
+      "pixi.toml",
+      "pixi.lock"
+    ],
+    "jvm": [
+      "crates/polylib-ffi/**",
+      "crates/polylib-core/**",
+      "packages/polylib-kt/**",
+      "conformance/**",
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/scripts/**",
+      "scripts/**",
+      "tools/**",
+      "pixi.toml",
+      "pixi.lock"
+    ],
+    "ruby": [
+      "crates/polylib-ffi/**",
+      "crates/polylib-core/**",
+      "packages/polylib-rb/**",
+      "conformance/**",
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/scripts/**",
+      "scripts/**",
+      "tools/**",
+      "pixi.toml",
+      "pixi.lock"
+    ],
+    "swift": [
+      "crates/polylib-ffi/**",
+      "crates/polylib-core/**",
+      "packages/polylib-swift/**",
+      "conformance/**",
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/scripts/**",
+      "scripts/**",
+      "tools/**",
+      "pixi.toml",
+      "pixi.lock"
+    ]
+  },
+  "security": {
+    "rust": [
+      "crates/**",
+      "Cargo.toml",
+      "Cargo.lock",
+      "deny.toml",
+      ".cargo/**",
+      ".github/workflows/security.yml"
+    ],
+    "python": [
+      "crates/polylib-py/**",
+      "packages/polylib-py/**",
+      "pyproject.toml",
+      "tox.ini",
+      "pixi.toml",
+      "pixi.lock",
+      ".github/workflows/security.yml"
+    ],
+    "js": [
+      "crates/polylib-js/**",
+      "crates/polylib-wasm/**",
+      "packages/polylib-js/**",
+      "packages/polylib-ts/**",
+      "packages/polylib-wasm/**",
+      "packages/config/**",
+      "package.json",
+      "bun.lock",
+      "bunfig.toml",
+      ".github/workflows/security.yml"
+    ],
+    "codeql-rust": [
+      "crates/**",
+      "Cargo.toml",
+      "Cargo.lock",
+      ".github/workflows/security.yml"
+    ],
+    "codeql-python": [
+      "crates/polylib-py/**",
+      "packages/polylib-py/**",
+      "pyproject.toml",
+      ".github/workflows/security.yml"
+    ],
+    "codeql-javascript-typescript": [
+      "crates/polylib-js/**",
+      "crates/polylib-wasm/**",
+      "packages/polylib-js/**",
+      "packages/polylib-ts/**",
+      "packages/polylib-wasm/**",
+      "packages/config/**",
+      "package.json",
+      "bun.lock",
+      "bunfig.toml",
+      ".github/workflows/security.yml"
+    ],
+    "codeql-actions": [
+      ".github/**"
+    ]
+  }
+}
