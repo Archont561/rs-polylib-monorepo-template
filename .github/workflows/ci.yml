@@ -345,73 +345,76 @@ jobs:
           path: dist-artifacts
 
       - name: Install tarballs and verify native + WASM-fallback in Bun
-        run: |
-          wasm_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-wasm-*.tgz)
-          js_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-js-*.tgz)
-          ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
-          mkdir -p /tmp/bun-consumer-native /tmp/bun-consumer-wasm
-          cd /tmp/bun-consumer-native
-          bun -e '
-            const [wasm, js, ts] = process.argv.slice(1);
-            await Bun.write("package.json", JSON.stringify({
-              name: "bun-consumer-native",
-              type: "module",
-              dependencies: {
-                "@polylib/polylib": "file:" + ts,
-                "@polylib/polylib-wasm": "file:" + wasm,
-                "@polylib/polylib-js": "file:" + js
-              },
-              overrides: {
-                "@polylib/polylib-wasm": "file:" + wasm,
-                "@polylib/polylib-js": "file:" + js
-              }
-            }, null, 2));
-          ' "${wasm_files[0]}" "${js_files[0]}" "${ts_files[0]}"
-          # `bun install --offline` only exists from Bun 1.4.1 onwards; every
-          # dependency here is a local `file:` tarball, so the older Bun
-          # releases install them without touching the network anyway.
-          if bun install --help 2>&1 | grep -q -- '--offline'; then
-            bun install --offline
-          else
-            bun install
-          fi
-          bun -e '
-            import * as facade from "@polylib/polylib";
-            import * as facadeWasm from "@polylib/polylib/wasm";
-            import * as wasmPkg from "@polylib/polylib-wasm";
-            import * as napiPkg from "@polylib/polylib-js";
-            if (facade.BACKEND !== "native" || facade.getEngineVersion() !== facade.VERSION) throw new Error("facade mismatch");
-            if (facade.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade slug mismatch");
-            if (facadeWasm.BACKEND !== "wasm" || facadeWasm.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade/wasm mismatch");
-            if (wasmPkg.getWasmVersion() !== wasmPkg.VERSION) throw new Error("wasm version mismatch");
-            if (napiPkg.getNativeVersion() !== napiPkg.VERSION) throw new Error("napi version mismatch");
-            const s = facade.summarizeScores([10, 20, 30]);
-            if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
-          '
-          cd /tmp/bun-consumer-wasm
-          bun -e '
-            const [wasm, ts] = process.argv.slice(1);
-            await Bun.write("package.json", JSON.stringify({
-              name: "bun-consumer-wasm",
-              type: "module",
-              dependencies: {
-                "@polylib/polylib": "file:" + ts,
-                "@polylib/polylib-wasm": "file:" + wasm
-              },
-              overrides: {
-                "@polylib/polylib-wasm": "file:" + wasm
-              }
-            }, null, 2));
-          ' "${wasm_files[0]}" "${ts_files[0]}"
-          if bun install --help 2>&1 | grep -q -- '--offline'; then
-            bun install --offline --omit=optional
-          else
-            bun install --omit=optional
-          fi
-          bun -e '
-            import * as facade from "@polylib/polylib";
-            if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
-          '
+        uses: ./.github/actions/diagnose
+        with:
+          label: "bun consumer matrix"
+          command: |
+            wasm_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-wasm-*.tgz)
+            js_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-js-*.tgz)
+            ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
+            mkdir -p /tmp/bun-consumer-native /tmp/bun-consumer-wasm
+            cd /tmp/bun-consumer-native
+            bun -e '
+              const [wasm, js, ts] = process.argv.slice(1);
+              await Bun.write("package.json", JSON.stringify({
+                name: "bun-consumer-native",
+                type: "module",
+                dependencies: {
+                  "@polylib/polylib": "file:" + ts,
+                  "@polylib/polylib-wasm": "file:" + wasm,
+                  "@polylib/polylib-js": "file:" + js
+                },
+                overrides: {
+                  "@polylib/polylib-wasm": "file:" + wasm,
+                  "@polylib/polylib-js": "file:" + js
+                }
+              }, null, 2));
+            ' "${wasm_files[0]}" "${js_files[0]}" "${ts_files[0]}"
+            # `bun install --offline` only exists from Bun 1.4.1 onwards; every
+            # dependency here is a local `file:` tarball, so the older Bun
+            # releases install them without touching the network anyway.
+            if bun install --help 2>&1 | grep -q -- '--offline'; then
+              bun install --offline
+            else
+              bun install
+            fi
+            bun -e '
+              import * as facade from "@polylib/polylib";
+              import * as facadeWasm from "@polylib/polylib/wasm";
+              import * as wasmPkg from "@polylib/polylib-wasm";
+              import * as napiPkg from "@polylib/polylib-js";
+              if (facade.BACKEND !== "native" || facade.getEngineVersion() !== facade.VERSION) throw new Error("facade mismatch");
+              if (facade.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade slug mismatch");
+              if (facadeWasm.BACKEND !== "wasm" || facadeWasm.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade/wasm mismatch");
+              if (wasmPkg.getWasmVersion() !== wasmPkg.VERSION) throw new Error("wasm version mismatch");
+              if (napiPkg.getNativeVersion() !== napiPkg.VERSION) throw new Error("napi version mismatch");
+              const s = facade.summarizeScores([10, 20, 30]);
+              if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
+            '
+            cd /tmp/bun-consumer-wasm
+            bun -e '
+              const [wasm, ts] = process.argv.slice(1);
+              await Bun.write("package.json", JSON.stringify({
+                name: "bun-consumer-wasm",
+                type: "module",
+                dependencies: {
+                  "@polylib/polylib": "file:" + ts,
+                  "@polylib/polylib-wasm": "file:" + wasm
+                },
+                overrides: {
+                  "@polylib/polylib-wasm": "file:" + wasm
+                }
+              }, null, 2));
+            ' "${wasm_files[0]}" "${ts_files[0]}"
+            if bun install --help 2>&1 | grep -q -- '--offline'; then
+              bun install --offline --omit=optional
+            else
+              bun install --omit=optional
+            fi
+            bun -e '
+              import * as facade from "@polylib/polylib";
+              if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
+            '
 
   uniffi-kotlin-ruby:
     name: UniFFI Bindings (Kotlin JVM & Ruby)
