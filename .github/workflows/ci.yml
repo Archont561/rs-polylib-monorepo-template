@@ -265,23 +265,32 @@ jobs:
 
       - name: Install tarballs and verify native + WASM-fallback in Node.js
         run: |
-          wasm_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-wasm-*.tgz)
-          js_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-js-*.tgz)
-          ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
-          mkdir -p /tmp/node-consumer-native /tmp/node-consumer-wasm
-          cd /tmp/node-consumer-native
+          # The tarballs are copied next to the consumer directories and
+          # referenced with paths that are relative to the consumer. An
+          # absolute `file:` reference is ambiguous: npm and Bun read a
+          # Windows drive letter as a URL host and then cannot find the
+          # tarball. The consumer stays outside the repository so that the
+          # monorepo workspace root is never picked up.
+          mkdir -p /tmp/node-consumers/tarballs /tmp/node-consumers/native /tmp/node-consumers/wasm
+          cp dist-artifacts/polylib-polylib-wasm-*.tgz /tmp/node-consumers/tarballs/
+          cp dist-artifacts/polylib-polylib-js-*.tgz /tmp/node-consumers/tarballs/
+          cp dist-artifacts/polylib-polylib-[0-9]*.tgz /tmp/node-consumers/tarballs/
+          wasm_file=$(basename /tmp/node-consumers/tarballs/polylib-polylib-wasm-*.tgz)
+          js_file=$(basename /tmp/node-consumers/tarballs/polylib-polylib-js-*.tgz)
+          ts_file=$(basename /tmp/node-consumers/tarballs/polylib-polylib-[0-9]*.tgz)
+          cd /tmp/node-consumers/native
           cat > package.json <<JSON
           {
             "name": "node-consumer-native",
             "type": "module",
             "dependencies": {
-              "@polylib/polylib": "file:${ts_files[0]}",
-              "@polylib/polylib-wasm": "file:${wasm_files[0]}",
-              "@polylib/polylib-js": "file:${js_files[0]}"
+              "@polylib/polylib": "file:../tarballs/${ts_file}",
+              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
+              "@polylib/polylib-js": "file:../tarballs/${js_file}"
             },
             "overrides": {
-              "@polylib/polylib-wasm": "file:${wasm_files[0]}",
-              "@polylib/polylib-js": "file:${js_files[0]}"
+              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
+              "@polylib/polylib-js": "file:../tarballs/${js_file}"
             }
           }
           JSON
@@ -302,17 +311,17 @@ jobs:
             const s = facade.summarizeScores([10, 20, 30]);
             if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
           '
-          cd /tmp/node-consumer-wasm
+          cd /tmp/node-consumers/wasm
           cat > package.json <<JSON
           {
             "name": "node-consumer-wasm",
             "type": "module",
             "dependencies": {
-              "@polylib/polylib": "file:${ts_files[0]}",
-              "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+              "@polylib/polylib": "file:../tarballs/${ts_file}",
+              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
             },
             "overrides": {
-              "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
             }
           }
           JSON
@@ -353,11 +362,20 @@ jobs:
         with:
           label: "bun consumer matrix"
           command: |
-            wasm_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-wasm-*.tgz)
-            js_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-js-*.tgz)
-            ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
-            mkdir -p /tmp/bun-consumer-native /tmp/bun-consumer-wasm
-            cd /tmp/bun-consumer-native
+            # The tarballs are copied next to the consumer directories and
+            # referenced with paths that are relative to the consumer. An
+            # absolute `file:` reference is ambiguous: Bun reads a Windows
+            # drive letter as a URL host and then cannot find the tarball.
+            # The consumer stays outside the repository so that the monorepo
+            # workspace root is never picked up.
+            mkdir -p /tmp/bun-consumers/tarballs /tmp/bun-consumers/native /tmp/bun-consumers/wasm
+            cp dist-artifacts/polylib-polylib-wasm-*.tgz /tmp/bun-consumers/tarballs/
+            cp dist-artifacts/polylib-polylib-js-*.tgz /tmp/bun-consumers/tarballs/
+            cp dist-artifacts/polylib-polylib-[0-9]*.tgz /tmp/bun-consumers/tarballs/
+            wasm_file=$(basename /tmp/bun-consumers/tarballs/polylib-polylib-wasm-*.tgz)
+            js_file=$(basename /tmp/bun-consumers/tarballs/polylib-polylib-js-*.tgz)
+            ts_file=$(basename /tmp/bun-consumers/tarballs/polylib-polylib-[0-9]*.tgz)
+            cd /tmp/bun-consumers/native
             # The manifest is written by the shell rather than by Bun: `bun -e`
             # only gained top-level await later, and `process.argv` differs
             # between Bun releases, so neither is portable across the matrix.
@@ -366,13 +384,13 @@ jobs:
               "name": "bun-consumer-native",
               "type": "module",
               "dependencies": {
-                "@polylib/polylib": "file:${ts_files[0]}",
-                "@polylib/polylib-wasm": "file:${wasm_files[0]}",
-                "@polylib/polylib-js": "file:${js_files[0]}"
+                "@polylib/polylib": "file:../tarballs/${ts_file}",
+                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
+                "@polylib/polylib-js": "file:../tarballs/${js_file}"
               },
               "overrides": {
-                "@polylib/polylib-wasm": "file:${wasm_files[0]}",
-                "@polylib/polylib-js": "file:${js_files[0]}"
+                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
+                "@polylib/polylib-js": "file:../tarballs/${js_file}"
               }
             }
             JSON
@@ -397,17 +415,17 @@ jobs:
               const s = facade.summarizeScores([10, 20, 30]);
               if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
             '
-            cd /tmp/bun-consumer-wasm
+            cd /tmp/bun-consumers/wasm
             cat > package.json <<JSON
             {
               "name": "bun-consumer-wasm",
               "type": "module",
               "dependencies": {
-                "@polylib/polylib": "file:${ts_files[0]}",
-                "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+                "@polylib/polylib": "file:../tarballs/${ts_file}",
+                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
               },
               "overrides": {
-                "@polylib/polylib-wasm": "file:${wasm_files[0]}"
+                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
               }
             }
             JSON
