@@ -1,0 +1,36 @@
+# lychee link checker configuration.
+# Offline checks run locally and in PR CI (`pixi run tools run docs links`);
+# online external URL checks run via `pixi run tools run docs links --online`.
+
+verbose = "warn"
+no_progress = true
+cache = false
+include_verbatim = false
+include_fragments = "full"
+format = "compact"
+extensions = ["md", "mdx", "html"]
+
+exclude_path = [
+  "(^|/)\\.pixi/",
+  "(^|/)node_modules/",
+  "(^|/)coverage/",
+  "(^|/)target/",
+  "(^|/)dist/",
+  "(^|/)\\.next/",
+  "(^|/)\\.source/",
+  "(^|/)apps/docs/out/",
+  "(^|/)\\.tasknest/",
+  "(^|/)\\.tox/",
+  "(^|/)\\.pytest_cache/",
+  "(^|/)\\.mypy_cache/",
+  "(^|/)\\.ruff_cache/",
+  "(^|/)\\.gradle/",
+  "(^|/)\\.build/",
+  "(^|/)packages/polylib-kt/build/",
+  "(^|/)packages/polylib-rb/vendor/",
+]
+
+exclude = [
+  '^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:[0-9]+)?(/|$)',
+  '^https://github\.com/your-org/polyglot-lib-template',
+]
