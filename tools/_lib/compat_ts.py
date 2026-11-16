@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools._lib.compat_ts_node import verify_node_consumers
+from tools._lib.tarball_ref import tarball_ref
 
 _BUN = "bun"
 _BUN_EXEC: tuple[str, ...] = (_BUN, "x", "--bun", "--no-install")
@@ -232,62 +233,57 @@ def _pack_tarball(root: Path, spec: TsPackageSpec, tmp_path: Path, *, lint_pkg: 
     return tarball
 
 
-def _tarball_ref(tarball: Path) -> str:
-    """Return a `file:` dependency reference for a local tarball.
+@dataclass(frozen=True)
+class ConsumerCase:
+    """One isolated consumer fixture for the Bun/tsc checks.
 
-    `file:` followed by a bare path is ambiguous: on Windows the path starts
-    with a drive letter, so `file:C:\\dir\\pkg.tgz` is parsed as a URL with
-    the host `C:` instead of a local path. `Path.as_uri()` renders a proper
-    `file://` URL with forward slashes on every platform.
+    `dependencies` and `overrides` map a package name onto the packed tarball
+    it must resolve to. The `file:` references are written relative to the
+    consumer directory, because that is the directory npm and Bun resolve them
+    from.
     """
-    return tarball.as_uri()
+
+    name: str
+    dependencies: dict[str, Path]
+    overrides: dict[str, Path]
+    source: str
+    install_argv: tuple[str, ...]
 
 
-def _backend_cases(
-    tarballs: dict[str, Path],
-) -> tuple[tuple[str, dict[str, object], str, tuple[str, ...]], ...]:
-    wasm_ref = _tarball_ref(tarballs[_WASM_PKG])
-    js_ref = _tarball_ref(tarballs[_JS_PKG])
+def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
+    """Describe the single-backend Bun consumer fixtures."""
     return (
-        (
+        ConsumerCase(
             "consumer-wasm",
-            _consumer_manifest("consumer-wasm", {_WASM_PKG: wasm_ref}),
+            {_WASM_PKG: tarballs[_WASM_PKG]},
+            {},
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_WASM_PKG, version_fn="getWasmVersion"),
             _install_argv(),
         ),
-        (
+        ConsumerCase(
             "consumer-js",
-            _consumer_manifest("consumer-js", {_JS_PKG: js_ref}),
+            {_JS_PKG: tarballs[_JS_PKG]},
+            {},
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_JS_PKG, version_fn="getNativeVersion"),
             _install_argv(),
         ),
     )
 
 
-def _facade_cases(
-    tarballs: dict[str, Path],
-) -> tuple[tuple[str, dict[str, object], str, tuple[str, ...]], ...]:
-    wasm_ref = _tarball_ref(tarballs[_WASM_PKG])
-    js_ref = _tarball_ref(tarballs[_JS_PKG])
-    facade_ref = _tarball_ref(tarballs[_FACADE_PKG])
+def _facade_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
+    """Describe the facade Bun consumer fixtures."""
     return (
-        (
+        ConsumerCase(
             "consumer-facade-native",
-            _consumer_manifest(
-                "consumer-facade-native",
-                {_FACADE_PKG: facade_ref},
-                overrides={_WASM_PKG: wasm_ref, _JS_PKG: js_ref},
-            ),
+            {_FACADE_PKG: tarballs[_FACADE_PKG]},
+            {_WASM_PKG: tarballs[_WASM_PKG], _JS_PKG: tarballs[_JS_PKG]},
             _facade_consumer_source("native", include_native_subpath=True),
             _install_argv(),
         ),
-        (
+        ConsumerCase(
             "consumer-facade-wasm-fallback",
-            _consumer_manifest(
-                "consumer-facade-wasm-fallback",
-                {_FACADE_PKG: facade_ref},
-                overrides={_WASM_PKG: wasm_ref},
-            ),
+            {_FACADE_PKG: tarballs[_FACADE_PKG]},
+            {_WASM_PKG: tarballs[_WASM_PKG]},
             _facade_consumer_source("wasm", include_native_subpath=False),
             _install_argv(("--omit=optional",)),
         ),
@@ -302,12 +298,16 @@ def _verify_bun_and_types(
     run_bun: bool,
     run_types: bool,
 ) -> None:
-    for name, manifest, source, install_argv in (
-        *_backend_cases(tarballs),
-        *_facade_cases(tarballs),
-    ):
-        consumer_dir = tmp_path / name
-        _prepare_consumer(consumer_dir, manifest, source, install_argv)
+    for case in (*_backend_cases(tarballs), *_facade_cases(tarballs)):
+        consumer_dir = tmp_path / case.name
+        manifest = _consumer_manifest(
+            case.name,
+            {pkg: tarball_ref(path, consumer_dir) for pkg, path in case.dependencies.items()},
+            overrides={
+                pkg: tarball_ref(path, consumer_dir) for pkg, path in case.overrides.items()
+            },
+        )
+        _prepare_consumer(consumer_dir, manifest, case.source, case.install_argv)
         _check_consumer_runtime_and_types(root, consumer_dir, run_bun=run_bun, run_types=run_types)
 
 

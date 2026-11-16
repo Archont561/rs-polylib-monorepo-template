@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+from tools._lib.tarball_ref import tarball_ref
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -100,34 +103,62 @@ def _run_node_consumer(
     _run_cmd((_NODE, _CHECK_MJS), consumer_dir)
 
 
-def _tarball_ref(tarball: Path) -> str:
-    """Return a `file:` dependency reference for a local tarball.
+def _node_manifest(
+    name: str,
+    consumer_dir: Path,
+    deps: dict[str, Path],
+    overrides: dict[str, Path],
+) -> dict[str, object]:
+    """Build a Node consumer manifest with relative `file:` tarball references."""
+    return {
+        "name": name,
+        "type": "module",
+        "dependencies": {pkg: tarball_ref(path, consumer_dir) for pkg, path in deps.items()},
+        "overrides": {pkg: tarball_ref(path, consumer_dir) for pkg, path in overrides.items()},
+    }
 
-    `file:` followed by a bare path is ambiguous: on Windows the path starts
-    with a drive letter, so `file:C:\\dir\\pkg.tgz` is parsed as a URL with
-    the host `C:` instead of a local path. `Path.as_uri()` renders a proper
-    `file://` URL with forward slashes on every platform.
+
+@dataclass(frozen=True)
+class NodeConsumerCase:
+    """One isolated Node.js consumer fixture.
+
+    `dependencies` and `overrides` map a package name onto the packed tarball
+    it must resolve to. The `file:` references are written relative to the
+    consumer directory, because that is the directory npm resolves them from.
     """
-    return tarball.as_uri()
+
+    dirname: str
+    name: str
+    dependencies: dict[str, Path]
+    overrides: dict[str, Path]
+    script: str
+    install_args: tuple[str, ...]
 
 
-def _node_manifests(tarballs: dict[str, Path]) -> tuple[dict[str, object], dict[str, object]]:
-    wasm_ref = _tarball_ref(tarballs[_WASM_PKG])
-    js_ref = _tarball_ref(tarballs[_JS_PKG])
-    facade_ref = _tarball_ref(tarballs[_FACADE_PKG])
-    native_manifest: dict[str, object] = {
-        "name": "node-consumer-native",
-        "type": "module",
-        "dependencies": {_FACADE_PKG: facade_ref, _WASM_PKG: wasm_ref, _JS_PKG: js_ref},
-        "overrides": {_WASM_PKG: wasm_ref, _JS_PKG: js_ref},
-    }
-    fallback_manifest: dict[str, object] = {
-        "name": "node-consumer-wasm-fallback",
-        "type": "module",
-        "dependencies": {_FACADE_PKG: facade_ref, _WASM_PKG: wasm_ref},
-        "overrides": {_WASM_PKG: wasm_ref},
-    }
-    return native_manifest, fallback_manifest
+def _node_consumer_cases(tarballs: dict[str, Path]) -> tuple[NodeConsumerCase, ...]:
+    """Describe the Node consumer fixtures."""
+    return (
+        NodeConsumerCase(
+            "node-native",
+            "node-consumer-native",
+            {
+                _FACADE_PKG: tarballs[_FACADE_PKG],
+                _WASM_PKG: tarballs[_WASM_PKG],
+                _JS_PKG: tarballs[_JS_PKG],
+            },
+            {_WASM_PKG: tarballs[_WASM_PKG], _JS_PKG: tarballs[_JS_PKG]},
+            _NODE_NATIVE_MJS,
+            (),
+        ),
+        NodeConsumerCase(
+            "node-wasm-fallback",
+            "node-consumer-wasm-fallback",
+            {_FACADE_PKG: tarballs[_FACADE_PKG], _WASM_PKG: tarballs[_WASM_PKG]},
+            {_WASM_PKG: tarballs[_WASM_PKG]},
+            _NODE_WASM_FALLBACK_MJS,
+            ("--omit=optional",),
+        ),
+    )
 
 
 def verify_node_consumers(
@@ -142,12 +173,8 @@ def verify_node_consumers(
             raise RuntimeError("`node` and `npm` are required for `--mode node` compatibility.")
         print("ts-compat: `node`/`npm` not found on PATH; skipping Node.js consumer checks.")
         return False
-    native_manifest, fallback_manifest = _node_manifests(tarballs)
-    _run_node_consumer(tmp_path / "node-native", native_manifest, _NODE_NATIVE_MJS, ())
-    _run_node_consumer(
-        tmp_path / "node-wasm-fallback",
-        fallback_manifest,
-        _NODE_WASM_FALLBACK_MJS,
-        ("--omit=optional",),
-    )
+    for case in _node_consumer_cases(tarballs):
+        consumer_dir = tmp_path / case.dirname
+        manifest = _node_manifest(case.name, consumer_dir, case.dependencies, case.overrides)
+        _run_node_consumer(consumer_dir, manifest, case.script, case.install_args)
     return True
