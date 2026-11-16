@@ -10,9 +10,9 @@ and the same three error codes, so behavior never depends on the language.
 
 Normalizes free-form text into a lowercase, hyphen-separated `ASCII` slug.
 
-- **Rust** — `polylib_core::normalize_slug(input: &str) -> Result<String, CoreError>`
-- **Python** — `polylib.normalize_slug(input: str) -> str`
-- **TypeScript** — `normalizeSlug(input: string): string`
+- **Rust**—`polylib_core::normalize_slug(input: &str) -> Result<String, CoreError>`
+- **Python**—`polylib.normalize_slug(input: str) -> str`
+- **TypeScript**—`normalizeSlug(input: string): string`
 
 Empty input raises `empty_input`.
 
@@ -22,11 +22,11 @@ Computes summary statistics over a non-empty slice of finite scores. The result
 carries the observation count, the minimum and maximum, the arithmetic mean, and
 the total.
 
-- **Rust** — `polylib_core::summarize_scores(values: &[f64]) -> Result<ScoreSummary, CoreError>`
-- **Python** — `polylib.summarize_scores(values: Sequence[float]) -> ScoreSummary`
-- **TypeScript** — `summarizeScores(values: readonly number[]): ScoreSummary`
+- **Rust**—`polylib_core::summarize_scores(values: &[f64]) -> Result<ScoreSummary, CoreError>`
+- **Python**—`polylib.summarize_scores(values: Sequence[float]) -> ScoreSummary`
+- **TypeScript**—`summarizeScores(values: readonly number[]): ScoreSummary`
 
-Empty input raises `empty_scores`. A value that is not finite raises
+Empty input raises `empty_scores`. A value that isn't finite raises
 `non_finite_value`.
 
 ## Error codes
@@ -47,9 +47,9 @@ appear on the `PolylibError` raised to the caller.
 
 Every package reports the same version, taken from the workspace manifest:
 
-- **Rust** — `polylib_core::VERSION`
-- **Python** — `polylib.__version__`
-- **TypeScript** — `VERSION`, with `getEngineVersion()` reporting the version of
+- **Rust**—`polylib_core::VERSION`
+- **Python**—`polylib.__version__`
+- **TypeScript**—`VERSION`, with `getEngineVersion()` reporting the version of
   the active engine build.
 
 The TypeScript facade additionally exports `BACKEND`, which names the engine that
