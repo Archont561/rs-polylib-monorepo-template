@@ -1,0 +1,29 @@
+[package]
+name = "polylib-core"
+description = "Pure Rust core library shared by the polylib metacrate, PyO3 Python package, and WASM TypeScript package."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+exclude = ["features/**", "tests/**"]
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+rstest.workspace = true
+rstest-bdd.workspace = true
+rstest-bdd-macros.workspace = true
+
+[lints]
+workspace = true
