@@ -36,25 +36,17 @@ runs:
             cat "$log"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-          # GitHub parses each workflow annotation from a single line and keeps
-          # only a handful per step. Emit the lines that name the problem and
-          # the lines that immediately follow them, because a parser error
-          # usually spells out the reason on the next line.
-          {
-            echo '--- tail ---'
-            tail -n 20 "$log"
-            echo '--- errors ---'
-            grep -n -A 4 -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal|exception|traceback)' "$log" \
-              | grep -v 'test result: ok' \
-              || head -n 12 "$log"
-          } \
+          # GitHub keeps only a handful of annotations per step, so the tail is
+          # packed into a single multi-line annotation (newlines are encoded as
+          # %0A) instead of being emitted one annotation per line.
+          tail -n "$DIAG_TAIL" "$log" \
             | tr '\r' '\n' \
-            | grep -v '^$' \
-            | head -n 10 \
             | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g' \
-            | while IFS= read -r line; do
-                echo "::error title=${DIAG_LABEL} failed::${line}"
-              done
+            | sed -e '$!s/$/%0A/' \
+            | tr -d '\n' \
+            > "$log.tail"
+          echo "::error title=${DIAG_LABEL} failed::$(cat "$log.tail")"
+          rm -f "$log.tail"
         fi
         rm -f "$log"
         exit "$status"
