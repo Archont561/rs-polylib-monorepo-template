@@ -1,0 +1,23 @@
+[package]
+name = "polylib-wasm"
+description = "Thin wasm-bindgen crate bridging polylib-core to TypeScript and JavaScript."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish.workspace = true
+
+[lib]
+name = "polylib_wasm"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+polylib-core = { workspace = true, features = ["serde"] }
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+
+[lints]
+workspace = true

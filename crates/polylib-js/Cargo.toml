@@ -1,0 +1,28 @@
+[package]
+name = "polylib-js"
+description = "Thin NAPI-RS native Node-API extension crate bridging polylib-core to Node.js and Bun."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish.workspace = true
+
+[lib]
+name = "polylib_js"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+napi.workspace = true
+napi-derive.workspace = true
+polylib-core.workspace = true
+
+[build-dependencies]
+napi-build.workspace = true
+
+[lints]
+workspace = true
