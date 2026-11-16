@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["name", "private", "type", "workspaces"],
+  "not": {
+    "anyOf": [{ "required": ["scripts"] }, { "required": ["dependencies"] }]
+  },
+  "properties": {
+    "private": { "const": true },
+    "type": { "const": "module" },
+    "workspaces": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "string" }
+    }
+  }
+}

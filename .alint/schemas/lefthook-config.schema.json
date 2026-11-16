@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["commit-msg", "pre-commit", "pre-push"],
+  "$defs": {
+    "job": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "run": {
+          "type": "string",
+          "pattern": "^pixi run (-e [a-z]+ )?tools\\b"
+        },
+        "group": {
+          "type": "object",
+          "required": ["jobs"],
+          "properties": {
+            "jobs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/job" }
+            }
+          }
+        }
+      }
+    },
+    "hook": {
+      "type": "object",
+      "required": ["jobs"],
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/job" }
+        }
+      }
+    }
+  },
+  "properties": {
+    "commit-msg": { "$ref": "#/$defs/hook" },
+    "pre-commit": { "$ref": "#/$defs/hook" },
+    "pre-push": { "$ref": "#/$defs/hook" }
+  }
+}

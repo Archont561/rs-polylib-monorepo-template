@@ -1,0 +1,29 @@
+test_version: 1
+name: crates/polylib-core pure Rust imports pass
+tags: [check, boundaries, rust, passing]
+
+given:
+  tree:
+    crates:
+      polylib-core:
+        src:
+          lib.rs: |
+            use thiserror::Error;
+            #[derive(Debug, Error)]
+            #[error("demo")]
+            pub struct DemoError;
+  config: |
+    version: 1
+    rules:
+      - id: boundary-rust-core-no-bindings
+        kind: import_gate
+        language: rust
+        paths: "crates/polylib-core/src/**/*.rs"
+        forbid: "^(pyo3|wasm_bindgen|js_sys|web_sys|polylib_py|polylib_wasm)"
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []

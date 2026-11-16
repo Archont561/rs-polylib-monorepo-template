@@ -1,0 +1,49 @@
+---
+title: Polylib documentation
+description: One Rust core shipped to Rust, Python, TypeScript (NAPI-RS + WASM), Kotlin, Swift, and Ruby.
+---
+
+## Overview
+
+Polylib is a polyglot library monorepo template where deterministic core logic lives once in `crates/polylib-core` and ships cleanly across six ecosystems:
+
+- **Rust**: `crates/polylib` public metacrate facade with additive feature flags (`serde`, `json`, `full`).
+- **Python**: `packages/polylib-py` built via `PyO3` (`abi3-py310`) and `maturin`.
+- **TypeScript (Unified Facade)**: `packages/polylib-ts` (`@polylib/polylib`) automatically selects native NAPI-RS on Node.js and Bun with WebAssembly fallback, plus explicit `/native`, `/wasm`, and `browser` entrypoints.
+- **TypeScript (WASM)**: `packages/polylib-wasm` (`@polylib/polylib-wasm`) built via `crates/polylib-wasm` (`wasm-bindgen`) and `bunup` for Browser, Edge, Bun, and Node.js.
+- **TypeScript (NAPI-RS)**: `packages/polylib-js` (`@polylib/polylib-js`) built via `crates/polylib-js` (`napi-rs` / Node-API v9) and `bunup` for native Node.js and Bun addons without WebAssembly.
+- **Kotlin (JVM)**: `packages/polylib-kt` generated from `crates/polylib-ffi` via `UniFFI`, built with Gradle and JNA, and verified with JUnit 5 and Cucumber-JVM.
+- **Swift**: `packages/polylib-swift` generated from `crates/polylib-ffi` via `UniFFI` as a SwiftPM package with XCTest conformance tests.
+- **Ruby**: `packages/polylib-rb` generated from `crates/polylib-ffi` via `UniFFI` as a RubyGems `.gem` using Ruby `ffi`, Minitest, and Cucumber.
+
+## Build and release workflows
+
+- **Build and artifact report (`.github/workflows/build.yml`)**: Compiles and packages all six ecosystems, generates `report.json`, renders `report.md` from `report.json` with Jinja2 (`templates/build-report.md.j2`), and writes `SHA256SUMS.txt`. The job appends `report.md` to the workflow summary and uploads both `build-report` and `release-bundle` artifacts.
+- **Multi-registry publishing (`.github/workflows/publish.yml`)**: Invokes `build.yml` and publishes each target in its own isolated GitHub Environment:
+  - **OIDC Trusted Publishing**: `crates-io` (`rust-lang/crates-io-auth-action`), `pypi` (`pypa/gh-action-pypi-publish`), `npm` (Node.js 24 OIDC + provenance), and `rubygems` (`rubygems/configure-rubygems-credentials`).
+  - **Maven Central**: `maven-central` (Gradle `maven-publish`).
+  - **GitHub Packages**: `github-packages-npm`, `github-packages-maven`, and `github-packages-rubygems`.
+  - **GitHub Releases**: `github-release` combines the conventional changelog with `report.md` and uploads all artifacts, `report.json`, `report.md`, and `SHA256SUMS.txt`.
+
+## Compatibility matrices (`tox` and Tasknest)
+
+Unified `tox.ini` environments (labels `python`, `npm`, `rust`, `ffi`, `compat`, and `all`), Tasknest `tools run ... tox` commands, and CI cross-version matrices verify every ecosystem:
+
+- **Rust (`-m rust`)**: `rust-features`, `rust-packages`, `rust-consumer`, and `rust-compat` (`tools run rust tox`), plus Rust MSRV (`rust-version = "1.88"`) and stable CI verification.
+- **Python (`-m python`)**: `py{310,311,312,313,314}-core` (wheel) and `sdist` environments verifying `pytest`, shared Gherkin conformance, and `importlib.metadata` constraints (`tools run python tox`, Python 3.10–3.14 on CI).
+- **npm and TypeScript (`-m npm`)**: `npm-pack`, `npm-bun`, `npm-node`, `npm-types`, and `npm-compat` (`tools run ts tox`) verify `publint --strict`, `attw`, native and WASM fallback installs, and strict `tsc` (`nodenext` and `bundler`). CI tests Node.js 20, 22, and 24 plus Bun 1.1, 1.4, and latest.
+- **Kotlin and JVM (`-m ffi`)**: `kotlin-compat` builds a JVM 17-compatible JAR and Maven POM, then runs a standalone JVM consumer without `-Djna.library.path` (`tools run ffi tox --env kotlin-compat`). CI tests JDK 17, 21, and 25.
+- **Ruby (`-m ffi`)**: `ruby-compat` packs `.gem` and smoke-tests an isolated `GEM_HOME` (`tools run ffi tox --env ruby-compat`). CI tests Ruby 3.2, 3.3, and 3.4.
+- **Swift (`-m ffi`)**: `swift-compat` verifies SwiftPM artifacts and runs C-ABI link smoke on Linux or full `swift test` when Swift is present (`tools run ffi tox --env swift-compat`). CI tests macOS 15 and Linux Swift 6.1.
+
+## Per-language coverage (`coverage/<lang>/`, 90% threshold)
+
+Every language writes its own report under `coverage/<lang>/` and enforces a **90%** minimum line coverage threshold locally and in CI. Workflows upload each language independently to GitHub Actions artifacts (`coverage-<lang>`) and Codecov (`.codecov.yml` per-language flags with `target: 90%`):
+
+- **Rust**: `coverage/rust/lcov.info` (`tools run rust test --coverage`, `cargo llvm-cov --fail-under-lines 90`, Codecov flag `rust`).
+- **Python**: `coverage/python/lcov.info` (`tools run python test --coverage`, `pytest --cov-fail-under=90`, Codecov flag `python`).
+- **TypeScript**: `coverage/ts/lcov.info` (`tools run ts test --coverage`, Bun `coverageThreshold = { line = 0.9 }` merged across `polylib-wasm`, `polylib-js`, and `polylib-ts`, Codecov flag `ts`).
+- **Kotlin and JVM**: `coverage/kotlin/jacoco.xml` (`tools run ffi test --target kotlin --coverage`, Gradle JaCoCo `minimum = 0.90`, Codecov flag `kotlin`).
+- **Ruby**: `coverage/ruby/lcov.info` (`tools run ffi test --target ruby --coverage`, Ruby stdlib `Coverage` merging Minitest and Cucumber, Codecov flag `ruby`).
+- **Swift**: `coverage/swift/lcov.info` (`tools run ffi test --target swift --require-swift --coverage`, `swift test --enable-code-coverage` + `llvm-cov export`, Codecov flag `swift`).
+- **Audit**: Run `pixi run -e full tools run coverage` to verify generated reports under `coverage/<lang>/` with the 90% threshold.

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["name", "version", "private", "license", "type"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^@polylib/app-[a-z0-9-]+$" },
+    "private": { "const": true },
+    "license": { "const": "MIT" },
+    "type": { "const": "module" }
+  }
+}

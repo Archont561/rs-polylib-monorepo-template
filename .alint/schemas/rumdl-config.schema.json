@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["global", "MD004", "MD049", "MD050"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["flavor"],
+      "properties": { "flavor": { "const": "gfm" } }
+    },
+    "MD004": {
+      "type": "object",
+      "required": ["style"],
+      "properties": { "style": { "const": "dash" } }
+    },
+    "MD049": {
+      "type": "object",
+      "required": ["style"],
+      "properties": { "style": { "const": "asterisk" } }
+    },
+    "MD050": {
+      "type": "object",
+      "required": ["style"],
+      "properties": { "style": { "const": "asterisk" } }
+    }
+  }
+}

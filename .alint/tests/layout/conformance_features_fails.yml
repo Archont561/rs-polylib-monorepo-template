@@ -1,0 +1,24 @@
+test_version: 1
+name: conformance directory without *.feature specs fails
+tags: [check, layout, conformance, failing]
+
+given:
+  tree:
+    conformance:
+      README.md: "# conformance\n"
+  config: |
+    version: 1
+    rules:
+      - id: require-conformance-features
+        kind: dir_contains
+        select: conformance
+        require:
+          - "*.feature"
+        level: error
+
+when: [check]
+
+expect:
+  - exit: policy_failure
+    violations:
+      - { rule: require-conformance-features, level: error }

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["coverage", "flags"],
+  "properties": {
+    "coverage": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "object",
+          "required": ["project", "patch"],
+          "properties": {
+            "project": {
+              "type": "object",
+              "required": ["rust", "python", "ts", "kotlin", "ruby", "swift"],
+              "properties": {
+                "rust": { "$ref": "#/$defs/langTarget" },
+                "python": { "$ref": "#/$defs/langTarget" },
+                "ts": { "$ref": "#/$defs/langTarget" },
+                "kotlin": { "$ref": "#/$defs/langTarget" },
+                "ruby": { "$ref": "#/$defs/langTarget" },
+                "swift": { "$ref": "#/$defs/langTarget" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "required": ["rust", "python", "ts", "kotlin", "ruby", "swift"]
+    }
+  },
+  "$defs": {
+    "langTarget": {
+      "type": "object",
+      "required": ["flags", "target"],
+      "properties": {
+        "target": { "const": "90%" }
+      }
+    }
+  }
+}

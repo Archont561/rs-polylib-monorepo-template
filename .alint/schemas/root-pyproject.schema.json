@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["tool"],
+  "properties": {
+    "tool": {
+      "type": "object",
+      "required": ["ruff", "mypy", "pytest", "rude"],
+      "properties": {
+        "mypy": {
+          "type": "object",
+          "required": ["strict"],
+          "properties": {
+            "strict": { "const": true }
+          }
+        },
+        "rude": {
+          "type": "object",
+          "required": ["select", "rules"],
+          "properties": {
+            "rules": {
+              "type": "object",
+              "required": ["CC804"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

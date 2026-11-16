@@ -1,0 +1,23 @@
+test_version: 1
+name: conformance directory with *.feature specs passes
+tags: [check, layout, conformance, passing]
+
+given:
+  tree:
+    conformance:
+      slug.feature: "Feature: Slug conformance\n"
+  config: |
+    version: 1
+    rules:
+      - id: require-conformance-features
+        kind: dir_contains
+        select: conformance
+        require:
+          - "*.feature"
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []

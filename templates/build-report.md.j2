@@ -1,0 +1,43 @@
+# Build & Artifact Report — `polylib` v{{ version }}
+
+Generated from `report.json` via Jinja2 (`templates/build-report.md.j2`).
+
+## Build Metadata
+
+| Field | Value |
+| :--- | :--- |
+| **Version** | `{{ version }}` |
+| **Git Ref** | `{{ git_ref }}` |
+| **Commit SHA** | `{{ git_sha }}` |
+| **Generated (UTC)** | `{{ generated_at }}` |
+| **Workflow Run** | {% if run_url %}[View run]({{ run_url }}){% else %}`local`{% endif %} |
+| **Total Artifacts** | `{{ summary.total_artifacts }}` (`{{ summary.total_size_human }}`) |
+| **Ecosystems Built** | {% for eco in summary.ecosystems %}`{{ eco }}`{% if not loop.last %}, {% endif %}{% endfor %} |
+
+## Artifact Inventory
+
+{% if artifacts %}
+| Ecosystem | File | Size | Target Registry | SHA-256 |
+| :--- | :--- | ---: | :--- | :--- |
+{% for item in artifacts %}
+| `{{ item.ecosystem }}` | `{{ item.path }}` | `{{ item.size_human }}` | {{ item.registry }} | `{{ item.sha256[:16] }}...` |
+{% endfor %}
+{% else %}
+No release artifacts were discovered in the input directory.
+{% endif %}
+
+## Verification Gates
+
+| Gate | Status |
+| :--- | :--- |
+{% for check in checks %}
+| `{{ check.name }}` | `{{ check.status }}` |
+{% endfor %}
+
+## SHA-256 Checksums
+
+```text
+{% for item in artifacts %}
+{{ item.sha256 }}  {{ item.path }}
+{% endfor %}
+```

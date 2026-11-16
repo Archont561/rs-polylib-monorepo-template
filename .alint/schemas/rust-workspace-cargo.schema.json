@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["workspace"],
+  "properties": {
+    "workspace": {
+      "type": "object",
+      "required": ["resolver", "members", "package", "lints"],
+      "properties": {
+        "resolver": { "const": "3" },
+        "members": {
+          "type": "array",
+          "minItems": 4,
+          "items": { "type": "string" }
+        },
+        "package": {
+          "type": "object",
+          "required": ["version", "edition", "rust-version", "license", "repository"],
+          "properties": {
+            "edition": { "const": "2024" },
+            "license": { "const": "MIT" },
+            "rust-version": { "type": "string", "pattern": "^1\\.[0-9]+(\\.[0-9]+)?$" }
+          }
+        },
+        "lints": {
+          "type": "object",
+          "required": ["rust", "clippy"],
+          "properties": {
+            "rust": {
+              "type": "object",
+              "required": ["unsafe_code"],
+              "properties": {
+                "unsafe_code": { "enum": ["deny", "forbid"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

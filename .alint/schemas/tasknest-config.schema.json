@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["tasknest", "discovery", "checks", "marks", "skill"],
+  "properties": {
+    "tasknest": {
+      "type": "object",
+      "required": ["config_version"],
+      "properties": { "config_version": { "const": 1 } }
+    },
+    "checks": {
+      "type": "object",
+      "required": ["strict", "require_description", "unknown_marks"],
+      "properties": {
+        "strict": { "const": true },
+        "require_description": { "const": true },
+        "unknown_marks": { "const": "error" }
+      }
+    },
+    "skill": {
+      "type": "object",
+      "required": ["output", "command"],
+      "properties": {
+        "output": { "const": ".agents/skills/project-tools/SKILL.md" },
+        "command": { "const": "pixi run tools" }
+      }
+    }
+  }
+}

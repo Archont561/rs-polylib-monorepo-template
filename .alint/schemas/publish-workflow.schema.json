@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["name", "on", "permissions", "jobs"],
+  "properties": {
+    "permissions": {
+      "type": "object",
+      "required": ["contents"],
+      "properties": {
+        "contents": { "const": "read" }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "required": [
+        "build",
+        "publish-crates",
+        "publish-pypi",
+        "publish-npm",
+        "publish-rubygems",
+        "publish-maven-central",
+        "publish-github-packages-npm",
+        "publish-github-packages-maven",
+        "publish-github-packages-rubygems",
+        "github-release"
+      ],
+      "properties": {
+        "build": {
+          "type": "object",
+          "required": ["uses"],
+          "properties": {
+            "uses": { "const": "./.github/workflows/build.yml" }
+          }
+        },
+        "publish-crates": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "crates-io" },
+            "permissions": {
+              "type": "object",
+              "required": ["id-token"],
+              "properties": { "id-token": { "const": "write" } }
+            }
+          }
+        },
+        "publish-pypi": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "pypi" },
+            "permissions": {
+              "type": "object",
+              "required": ["id-token"],
+              "properties": { "id-token": { "const": "write" } }
+            }
+          }
+        },
+        "publish-npm": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "npm" },
+            "permissions": {
+              "type": "object",
+              "required": ["id-token"],
+              "properties": { "id-token": { "const": "write" } }
+            }
+          }
+        },
+        "publish-rubygems": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "rubygems" },
+            "permissions": {
+              "type": "object",
+              "required": ["id-token"],
+              "properties": { "id-token": { "const": "write" } }
+            }
+          }
+        },
+        "publish-maven-central": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "maven-central" }
+          }
+        },
+        "publish-github-packages-npm": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "github-packages-npm" },
+            "permissions": {
+              "type": "object",
+              "required": ["packages"],
+              "properties": { "packages": { "const": "write" } }
+            }
+          }
+        },
+        "publish-github-packages-maven": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "github-packages-maven" },
+            "permissions": {
+              "type": "object",
+              "required": ["packages"],
+              "properties": { "packages": { "const": "write" } }
+            }
+          }
+        },
+        "publish-github-packages-rubygems": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "github-packages-rubygems" },
+            "permissions": {
+              "type": "object",
+              "required": ["packages"],
+              "properties": { "packages": { "const": "write" } }
+            }
+          }
+        },
+        "github-release": {
+          "type": "object",
+          "required": ["environment", "permissions"],
+          "properties": {
+            "environment": { "const": "github-release" },
+            "permissions": {
+              "type": "object",
+              "required": ["contents"],
+              "properties": { "contents": { "const": "write" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
