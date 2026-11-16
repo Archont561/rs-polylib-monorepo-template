@@ -36,18 +36,18 @@ runs:
             cat "$log"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-          # GitHub keeps only a handful of annotations per step, so fold the whole
-          # log into a single one and prefer the head of the output: the reason a
-          # tool failed is usually in its first lines, not its last.
-          {
-            echo "::error title=${DIAG_LABEL} failed::"
-            echo "--- head ---"
-            head -n 15 "$log"
-            echo "--- tail ---"
-            tail -n 10 "$log"
-          } | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | while IFS= read -r line; do
-            echo "$line"
-          done
+          # GitHub keeps only a handful of annotations per step and parses each
+          # one from a single line, so flatten the most relevant part of the
+          # output into one annotation. The reason a tool failed is usually in
+          # the first lines of its output, not the last.
+          head -n 20 "$log" \
+            | tr '\r' '\n' \
+            | grep -v '^$' \
+            | head -n 6 \
+            | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g' \
+            | while IFS= read -r line; do
+                echo "::error title=${DIAG_LABEL} failed::${line}"
+              done
         fi
         rm -f "$log"
         exit "$status"
