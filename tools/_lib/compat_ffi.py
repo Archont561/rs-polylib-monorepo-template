@@ -157,6 +157,9 @@ def _isolated_ruby_env(gem_home: Path, rb_root: Path) -> dict[str, str]:
     paths = [str(gem_home)]
     vendor_ruby = rb_root / "vendor" / _BUNDLE_BIN / TARGET_RUBY
     if vendor_ruby.is_dir():
+        # Bundler installs into `<BUNDLE_PATH>/ruby/<abi>/`, and that directory
+        # is a gem home: it holds `gems/` and `specifications/`. Each entry of
+        # GEM_PATH must be such a directory, not one of its children.
         paths.extend(str(p) for p in sorted(vendor_ruby.iterdir()) if p.is_dir())
     iso_env["GEM_PATH"] = os.pathsep.join(paths)
     return iso_env
