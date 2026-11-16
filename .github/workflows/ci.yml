@@ -147,16 +147,23 @@ jobs:
 
       - name: Pack TypeScript tarballs for runtime compatibility matrices
         run: |
-          mkdir -p dist-artifacts
-          pixi run -e full bun pm pack --cwd packages/polylib-wasm --destination dist-artifacts
-          pixi run -e full bun pm pack --cwd packages/polylib-js --destination dist-artifacts
-          pixi run -e full bun pm pack --cwd packages/polylib-ts --destination dist-artifacts
+          mkdir -p "$GITHUB_WORKSPACE/dist-artifacts"
+          # `bun pm pack --cwd <pkg>` resolves a relative `--destination` against the
+          # package directory, not the repository root. Pass an absolute path so the
+          # tarballs land where the upload step and the consumer matrices look for them.
+          for pkg in polylib-wasm polylib-js polylib-ts; do
+            pixi run -e full bun pm pack \
+              --cwd "packages/$pkg" \
+              --destination "$GITHUB_WORKSPACE/dist-artifacts"
+          done
+          ls -l "$GITHUB_WORKSPACE/dist-artifacts"
 
       - name: Upload packed TypeScript tarballs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: polylib-ts-tarballs
           path: dist-artifacts/*.tgz
+          if-no-files-found: error
           retention-days: 1
 
       - name: Upload Python coverage artifact
@@ -452,7 +459,10 @@ jobs:
           fail_ci_if_error: false
 
       - name: Verify Kotlin JAR, Ruby isolated gem, and Swift C-ABI compatibility
-        run: pixi run -e ffi tools run ffi compat
+        uses: ./.github/actions/diagnose
+        with:
+          label: "ffi compat"
+          command: pixi run -e ffi tools run ffi compat
 
       - name: Stage Kotlin JAR + runtime classpath and Ruby gem for version matrices
         run: |
@@ -575,7 +585,9 @@ jobs:
             setup_swift: false
             swift_version: ""
           - label: Linux (Swift 6.1)
-            os: ubuntu-latest
+            # Pinned to 24.04: `ubuntu-latest` now resolves to Ubuntu 26, which
+            # swift-actions/setup-swift does not support yet.
+            os: ubuntu-24.04
             setup_swift: true
             swift_version: "6.1"
     steps:
@@ -638,12 +650,14 @@ jobs:
           cache-key: ci-cross-os-${{ matrix.os }}
 
       - name: Run full polyglot test and compatibility suites
-        shell: bash
-        run: |
-          pixi run -e full tools run test
-          pixi run -e full tools run rust compat
-          pixi run -e full tools run python compat
-          pixi run -e full tools run ts compat
+        uses: ./.github/actions/diagnose
+        with:
+          label: "cross-os polyglot suites"
+          command: |
+            pixi run -e full tools run test
+            pixi run -e full tools run rust compat
+            pixi run -e full tools run python compat
+            pixi run -e full tools run ts compat
 
   ci-gate:
     name: CI Required Gate
