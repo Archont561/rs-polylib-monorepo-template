@@ -1,0 +1,56 @@
+---
+title: API reference
+description: The core functions, their error codes, and how each language binding exposes them.
+---
+
+The core library is small on purpose. Every binding exposes the same two functions
+and the same three error codes, so behavior never depends on the language.
+
+## `normalize_slug`
+
+Normalizes free-form text into a lowercase, hyphen-separated `ASCII` slug.
+
+- **Rust** — `polylib_core::normalize_slug(input: &str) -> Result<String, CoreError>`
+- **Python** — `polylib.normalize_slug(input: str) -> str`
+- **TypeScript** — `normalizeSlug(input: string): string`
+
+Empty input raises `empty_input`.
+
+## `summarize_scores`
+
+Computes summary statistics over a non-empty slice of finite scores. The result
+carries the observation count, the minimum and maximum, the arithmetic mean, and
+the total.
+
+- **Rust** — `polylib_core::summarize_scores(values: &[f64]) -> Result<ScoreSummary, CoreError>`
+- **Python** — `polylib.summarize_scores(values: Sequence[float]) -> ScoreSummary`
+- **TypeScript** — `summarizeScores(values: readonly number[]): ScoreSummary`
+
+Empty input raises `empty_scores`. A value that is not finite raises
+`non_finite_value`.
+
+## Error codes
+
+Each error carries a stable code that the shared conformance scenarios match on.
+The codes are the contract between the core and every binding:
+
+| Code | Raised when |
+| :--- | :--- |
+| `empty_input` | The input holds no `ASCII` alphanumeric characters after normalization. |
+| `empty_scores` | The score slice holds zero observations. |
+| `non_finite_value` | The score slice holds a `NaN` or an infinite value. |
+
+In Rust the codes come from `CoreError::code()`. In Python and TypeScript they
+appear on the `PolylibError` raised to the caller.
+
+## Version
+
+Every package reports the same version, taken from the workspace manifest:
+
+- **Rust** — `polylib_core::VERSION`
+- **Python** — `polylib.__version__`
+- **TypeScript** — `VERSION`, with `getEngineVersion()` reporting the version of
+  the active engine build.
+
+The TypeScript facade additionally exports `BACKEND`, which names the engine that
+is active at run time: either the native NAPI-RS addon or the WebAssembly module.
