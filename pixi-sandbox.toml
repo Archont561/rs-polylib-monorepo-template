@@ -10,5 +10,5 @@ max_restore_required_mib = 8192
 
 [[bundle]]
 name = "developer"
-environments = ["default", "py", "js", "lint", "docs", "rust", "full"]
+environments = ["default", "js", "lint", "docs", "rust", "full"]
 platforms = ["linux-64"]
