@@ -1,0 +1,31 @@
+[package]
+name = "polylib-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Thin UniFFI foreign-function interface crate exposing polylib-core to Kotlin, Swift, and Ruby."
+
+[lib]
+name = "polylib_ffi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
+required-features = ["bindgen-cli"]
+
+[features]
+default = []
+bindgen-cli = ["uniffi/cli"]
+
+[dependencies]
+polylib-core = { workspace = true }
+thiserror = { workspace = true }
+uniffi = { workspace = true }
+
+[lints]
+workspace = true

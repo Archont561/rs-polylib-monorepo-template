@@ -1,0 +1,28 @@
+[package]
+name = "polylib-py"
+description = "Thin PyO3 native extension crate bridging polylib-core to Python via maturin."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish.workspace = true
+
+[lib]
+name = "polylib_py"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+polylib-core.workspace = true
+pyo3.workspace = true
+
+[lints]
+workspace = true

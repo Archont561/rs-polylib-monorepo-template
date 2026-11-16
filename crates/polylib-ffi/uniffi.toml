@@ -1,0 +1,15 @@
+[bindings.kotlin]
+package_name = "dev.polylib.ffi"
+cdylib_name = "polylib_ffi"
+generate_immutable_records = true
+
+[bindings.swift]
+module_name = "PolylibFFI"
+ffi_module_name = "PolylibFFIInternal"
+ffi_module_filename = "PolylibFFIInternal"
+cdylib_name = "polylib_ffi"
+generate_immutable_records = true
+
+[bindings.ruby]
+module_name = "PolylibFFI"
+cdylib_name = "polylib_ffi"
