@@ -1,0 +1,296 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+jobs:
+  build-rust:
+    name: Build & Pack Rust Crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust environment & cache
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: rust
+          cache-key: build-rust
+
+      - name: Verify Rust lint, tests, policy, and compatibility
+        run: |
+          pixi run -e rust tools run rust lint
+          pixi run -e rust tools run rust test
+          pixi run -e rust tools run security deny_rs
+          pixi run -e rust tools run rust compat
+
+      - name: Check Rust SemVer API compatibility
+        uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        continue-on-error: true
+        with:
+          package: polylib
+
+      - name: Pack Rust .crate archives
+        run: pixi run -e rust tools run release pack --target rust --output-dir dist-artifacts
+
+      - name: Upload Rust crate artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-rust
+          path: dist-artifacts/rust/*.crate
+          if-no-files-found: error
+
+  build-python-wheels:
+    name: Build Python Wheels (${{ matrix.os }} / ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+            args: "--release --locked --compatibility manylinux2014"
+          - os: macos-15
+            target: aarch64
+            args: "--release --locked"
+          - os: windows-latest
+            target: x64
+            args: "--release --locked"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Build cp310-abi3 wheels via maturin-action
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: packages/polylib-py
+          target: ${{ matrix.target }}
+          args: ${{ matrix.args }} --out dist-wheels
+          manylinux: auto
+
+      - name: Upload Python wheel artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-python-wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: packages/polylib-py/dist-wheels/*.whl
+          if-no-files-found: error
+
+  build-python-sdist:
+    name: Build Python Source Distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build sdist via maturin-action
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: sdist
+          working-directory: packages/polylib-py
+          args: --out dist-sdist
+
+      - name: Upload Python sdist artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-python-sdist
+          path: packages/polylib-py/dist-sdist/*.tar.gz
+          if-no-files-found: error
+
+  build-npm:
+    name: Build & Pack npm Packages (WASM, NAPI-RS, Facade)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup full environment & compile bindings
+        uses: ./.github/actions/setup-bindings
+        with:
+          cache-key: build-npm
+
+      - name: Run Python and TypeScript test & compatibility gates
+        run: |
+          pixi run -e full tools run python test
+          pixi run -e full tools run python compat
+          pixi run -e full tools run ts lint
+          pixi run -e full tools run ts test
+          pixi run -e full tools run ts compat
+
+      - name: Pack npm tarballs
+        run: pixi run -e full tools run release pack --target npm --output-dir dist-artifacts
+
+      - name: Upload npm tarball artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-npm
+          path: dist-artifacts/npm/*.tgz
+          if-no-files-found: error
+
+  build-uniffi-kotlin-ruby:
+    name: Build & Pack UniFFI Kotlin JAR & Ruby Gem
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Pixi ffi environment & Rust cache
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: ffi
+          cache-key: build-uniffi-linux
+
+      - name: Build, test, and verify Kotlin & Ruby UniFFI packages
+        run: |
+          pixi run -e ffi tools run ffi build
+          pixi run -e ffi tools run ffi test --target kotlin
+          pixi run -e ffi tools run ffi compat --target kotlin
+          pixi run -e ffi tools run ffi test --target ruby
+          pixi run -e ffi tools run ffi compat --target ruby
+
+      - name: Pack Kotlin JAR/POM and Ruby gem
+        run: |
+          pixi run -e ffi tools run release pack --target kotlin --output-dir dist-artifacts
+          pixi run -e ffi tools run release pack --target ruby --output-dir dist-artifacts
+
+      - name: Upload Kotlin artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-kotlin
+          path: dist-artifacts/kotlin/*
+          if-no-files-found: error
+
+      - name: Upload Ruby gem artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-ruby
+          path: dist-artifacts/ruby/*.gem
+          if-no-files-found: error
+
+  build-uniffi-swift:
+    name: Build & Pack UniFFI SwiftPM Bundle
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Pixi rust environment & Rust cache
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: rust
+          cache-key: build-uniffi-swift-macos
+
+      - name: Build, test, and pack SwiftPM UniFFI bundle
+        run: |
+          pixi run -e rust tools run ffi build --target swift
+          pixi run -e rust tools run ffi test --target swift --require-swift
+          pixi run -e rust tools run ffi compat --target swift
+          pixi run -e rust tools run release pack --target swift --output-dir dist-artifacts
+
+      - name: Upload SwiftPM bundle artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-swift
+          path: dist-artifacts/swift/*.tar.gz
+          if-no-files-found: error
+
+  build-report:
+    name: Generate Build Report (report.json + report.md)
+    needs:
+      - build-rust
+      - build-python-wheels
+      - build-python-sdist
+      - build-npm
+      - build-uniffi-kotlin-ruby
+      - build-uniffi-swift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Pixi default environment
+        uses: ./.github/actions/setup
+        with:
+          environment: default
+
+      - name: Download all built ecosystem artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "artifacts-*"
+          path: dist-release
+
+      - name: Generate report.json, Jinja-rendered report.md, and SHA256SUMS.txt
+        env:
+          GIT_REF: ${{ github.ref_name }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHECKS_SPEC: >-
+            build-rust=${{ needs.build-rust.result }},
+            build-python-wheels=${{ needs.build-python-wheels.result }},
+            build-python-sdist=${{ needs.build-python-sdist.result }},
+            build-npm=${{ needs.build-npm.result }},
+            build-uniffi-kotlin-ruby=${{ needs.build-uniffi-kotlin-ruby.result }},
+            build-uniffi-swift=${{ needs.build-uniffi-swift.result }}
+        run: |
+          pixi run tools run release report \
+            --artifacts-dir dist-release \
+            --output-dir dist-report \
+            --checks "$CHECKS_SPEC"
+          cp dist-report/report.json dist-report/report.md dist-report/SHA256SUMS.txt dist-release/
+          cat dist-report/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build-report artifact (report.json, report.md, SHA256SUMS.txt)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-report
+          path: |
+            dist-report/report.json
+            dist-report/report.md
+            dist-report/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Upload unified release-bundle artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-bundle
+          path: dist-release/**
+          if-no-files-found: error

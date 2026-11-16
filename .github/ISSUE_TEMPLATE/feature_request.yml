@@ -1,0 +1,64 @@
+# Generated from templates/github/ISSUE_TEMPLATE/feature_request.yml.j2
+# Regenerate with: pixi run tools run docs write
+name: Feature Request
+description: Propose a new library capability, conformance case, or tooling enhancement.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Target Area
+      description: Select the primary ecosystem or tooling surface.
+      options:
+
+        - "Rust crate (polylib)"
+
+        - "Rust crate (polylib-core)"
+
+        - "Rust crate (polylib-ffi)"
+
+        - "Rust crate (polylib-js)"
+
+        - "Rust crate (polylib-py)"
+
+        - "Rust crate (polylib-wasm)"
+
+        - "Python package (polylib)"
+
+        - "TypeScript package (@polylib/config)"
+
+        - "TypeScript package (@polylib/polylib-js)"
+
+        - "TypeScript package (@polylib/polylib)"
+
+        - "TypeScript package (@polylib/polylib-wasm)"
+
+        - "UniFFI package (packages/polylib-kt)"
+
+        - "UniFFI package (packages/polylib-rb)"
+
+        - "UniFFI package (packages/polylib-swift)"
+
+        - "Docs app (apps/docs)"
+
+        - "Tooling / CI / Pixi / Policy"
+
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Describe the use case and why it belongs in the core or bindings.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API & Conformance Impact
+      description: Outline Rust, Python, and TypeScript signatures and any `conformance/*.feature` Gherkin additions.
+    validations:
+      required: true

@@ -1,0 +1,76 @@
+# Generated from templates/github/ISSUE_TEMPLATE/bug_report.yml.j2
+# Regenerate with: pixi run tools run docs write
+name: Bug Report
+description: Report a reproducible bug in Rust, Python, TypeScript, or workspace tooling.
+title: "[Bug]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug in **polyglot-lib-template** (`v0.1.0`).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      description: Select the crate, package, or toolchain lane affected.
+      options:
+
+        - "Rust crate (polylib)"
+
+        - "Rust crate (polylib-core)"
+
+        - "Rust crate (polylib-ffi)"
+
+        - "Rust crate (polylib-js)"
+
+        - "Rust crate (polylib-py)"
+
+        - "Rust crate (polylib-wasm)"
+
+        - "Python package (polylib)"
+
+        - "TypeScript package (@polylib/config)"
+
+        - "TypeScript package (@polylib/polylib-js)"
+
+        - "TypeScript package (@polylib/polylib)"
+
+        - "TypeScript package (@polylib/polylib-wasm)"
+
+        - "UniFFI package (packages/polylib-kt)"
+
+        - "UniFFI package (packages/polylib-rb)"
+
+        - "UniFFI package (packages/polylib-swift)"
+
+        - "Docs app (apps/docs)"
+
+        - "Tooling / CI / Pixi / Policy"
+
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Clear description of the bug and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal Reproduction
+      description: Exact `pixi run tools ...` command or code snippet.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Rust / Python / Bun / Node.js version.
+      placeholder: "Ubuntu 24.04 x86_64, Rust 1.88, Python 3.12, Bun 1.4"
+    validations:
+      required: true

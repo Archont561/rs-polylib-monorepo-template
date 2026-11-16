@@ -1,0 +1,675 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Policy, Docs & Static Linters
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Pixi full environment & Bun workspace
+        uses: ./.github/actions/setup
+        with:
+          environment: full
+          install-bun: "true"
+
+      - name: Validate Tasknest graph & generated agent skill
+        run: |
+          pixi run -e full tools check
+          pixi run -e full tools skill --check
+
+      - name: Run offline policy, docs, formatting, and linter gates
+        run: pixi run -e full tools run check
+
+  rust:
+    name: Rust (Clippy, Tests, Deny, Compat)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust toolchain & cache
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: rust
+          cache-key: ci-rust
+
+      - name: Lint Rust workspace
+        run: pixi run -e rust tools run rust lint
+
+      - name: Test Rust workspace with coverage
+        run: pixi run -e rust tools run rust test --coverage
+
+      - name: Check Cargo policy (cargo-deny offline)
+        run: pixi run -e rust tools run security deny_rs
+
+      - name: Verify Rust feature matrix, tarballs, and isolated .crate consumer
+        run: pixi run -e rust tools run rust compat
+
+      - name: Upload Rust coverage artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-rust
+          path: coverage/rust/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Rust coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage/rust/lcov.info
+          flags: rust
+          name: coverage-rust
+          fail_ci_if_error: false
+
+  rust-msrv:
+    name: Rust MSRV Proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Pixi default environment
+        uses: ./.github/actions/setup
+        with:
+          environment: default
+
+      - name: Read declared MSRV from Cargo.toml
+        id: msrv
+        run: pixi run tools run rust msrv --github-output msrv
+
+      - name: Install declared MSRV Rust toolchain
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: ${{ steps.msrv.outputs.msrv }}
+
+      - name: Cache Cargo registry for MSRV
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: ci-rust-msrv-${{ steps.msrv.outputs.msrv }}
+          cache-on-failure: true
+
+      - name: Prove metacrate feature matrix at declared MSRV
+        run: pixi run tools run rust msrv --toolchain "${{ steps.msrv.outputs.msrv }}"
+
+  polyglot-bindings:
+    name: Python & TypeScript Bindings + Compat
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup full environment & compile PyO3 + WASM bindings
+        uses: ./.github/actions/setup-bindings
+        with:
+          cache-key: ci-bindings
+
+      - name: Run Python tests with coverage
+        run: pixi run -e full tools run python test --coverage
+
+      - name: Run TypeScript typecheck & tests with coverage
+        run: |
+          pixi run -e full tools run ts lint
+          pixi run -e full tools run ts test --coverage
+
+      - name: Verify Python wheel/sdist & isolated venv compatibility
+        run: pixi run -e full tools run python compat
+
+      - name: Verify TypeScript tarball (publint, attw, isolated consumer)
+        run: pixi run -e full tools run ts compat
+
+      - name: Pack TypeScript tarballs for runtime compatibility matrices
+        run: |
+          mkdir -p dist-artifacts
+          pixi run -e full bun pm pack --cwd packages/polylib-wasm --destination dist-artifacts
+          pixi run -e full bun pm pack --cwd packages/polylib-js --destination dist-artifacts
+          pixi run -e full bun pm pack --cwd packages/polylib-ts --destination dist-artifacts
+
+      - name: Upload packed TypeScript tarballs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: polylib-ts-tarballs
+          path: dist-artifacts/*.tgz
+          retention-days: 1
+
+      - name: Upload Python coverage artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-python
+          path: coverage/python/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload TypeScript coverage artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-ts
+          path: coverage/ts/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Python coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage/python/lcov.info
+          flags: python
+          name: coverage-python
+          fail_ci_if_error: false
+
+      - name: Upload TypeScript coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage/ts/lcov.info
+          flags: ts
+          name: coverage-ts
+          fail_ci_if_error: false
+
+  python-versions:
+    name: Python Compatibility (tox ${{ matrix.tox }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.10", tox: py310 }
+          - { python: "3.11", tox: py311 }
+          - { python: "3.12", tox: py312 }
+          - { python: "3.13", tox: py313 }
+          - { python: "3.14", tox: py314 }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python ${{ matrix.python }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: ci-py-matrix-${{ matrix.python }}
+
+      - name: Install tox and run Python compatibility environment
+        env:
+          TOX_ENV: ${{ matrix.tox }}-core
+        run: |
+          python -m pip install --upgrade pip "tox>=4,<5"
+          tox -e "$TOX_ENV"
+
+  node-versions:
+    name: Node.js ESM+WASM+NAPI Compatibility (Node ${{ matrix.node-version }})
+    needs: [polyglot-bindings]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22", "24"]
+    steps:
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Download packed TypeScript tarballs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: polylib-ts-tarballs
+          path: dist-artifacts
+
+      - name: Install tarballs and verify native + WASM-fallback in Node.js
+        run: |
+          wasm_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-wasm-*.tgz)
+          js_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-js-*.tgz)
+          ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
+          mkdir -p /tmp/node-consumer-native /tmp/node-consumer-wasm
+          cd /tmp/node-consumer-native
+          node -e '
+            const fs = require("node:fs");
+            const [wasm, js, ts] = process.argv.slice(1);
+            fs.writeFileSync("package.json", JSON.stringify({
+              name: "node-consumer-native",
+              type: "module",
+              dependencies: {
+                "@polylib/polylib": "file:" + ts,
+                "@polylib/polylib-wasm": "file:" + wasm,
+                "@polylib/polylib-js": "file:" + js
+              },
+              overrides: {
+                "@polylib/polylib-wasm": "file:" + wasm,
+                "@polylib/polylib-js": "file:" + js
+              }
+            }, null, 2));
+          ' "${wasm_files[0]}" "${js_files[0]}" "${ts_files[0]}"
+          npm install --no-save --no-audit --no-fund
+          node --input-type=module -e '
+            import { createRequire } from "node:module";
+            import * as facade from "@polylib/polylib";
+            import * as facadeWasm from "@polylib/polylib/wasm";
+            import * as wasmPkg from "@polylib/polylib-wasm";
+            import * as napiPkg from "@polylib/polylib-js";
+            const pkg = createRequire(import.meta.url)("@polylib/polylib/package.json");
+            if (pkg.name !== "@polylib/polylib") throw new Error("pkg mismatch");
+            if (facade.BACKEND !== "native" || facade.getEngineVersion() !== facade.VERSION) throw new Error("facade mismatch");
+            if (facade.normalizeSlug("Hello Node!") !== "hello-node") throw new Error("facade slug mismatch");
+            if (facadeWasm.BACKEND !== "wasm" || facadeWasm.normalizeSlug("Hello Node!") !== "hello-node") throw new Error("facade/wasm mismatch");
+            if (wasmPkg.getWasmVersion() !== wasmPkg.VERSION) throw new Error("wasm version mismatch");
+            if (napiPkg.getNativeVersion() !== napiPkg.VERSION) throw new Error("napi version mismatch");
+            const s = facade.summarizeScores([10, 20, 30]);
+            if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
+          '
+          cd /tmp/node-consumer-wasm
+          node -e '
+            const fs = require("node:fs");
+            const [wasm, ts] = process.argv.slice(1);
+            fs.writeFileSync("package.json", JSON.stringify({
+              name: "node-consumer-wasm",
+              type: "module",
+              dependencies: {
+                "@polylib/polylib": "file:" + ts,
+                "@polylib/polylib-wasm": "file:" + wasm
+              },
+              overrides: {
+                "@polylib/polylib-wasm": "file:" + wasm
+              }
+            }, null, 2));
+          ' "${wasm_files[0]}" "${ts_files[0]}"
+          npm install --no-save --omit=optional --no-audit --no-fund
+          node --input-type=module -e '
+            import * as facade from "@polylib/polylib";
+            if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
+          '
+
+  bun-versions:
+    name: Bun Compatibility (Bun ${{ matrix.bun-version }})
+    needs: [polyglot-bindings]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        bun-version: ["1.1", "1.4", "latest"]
+    steps:
+      - name: Setup Bun ${{ matrix.bun-version }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ matrix.bun-version }}
+
+      - name: Download packed TypeScript tarballs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: polylib-ts-tarballs
+          path: dist-artifacts
+
+      - name: Install tarballs and verify native + WASM-fallback in Bun
+        run: |
+          wasm_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-wasm-*.tgz)
+          js_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-js-*.tgz)
+          ts_files=("$GITHUB_WORKSPACE"/dist-artifacts/polylib-polylib-[0-9]*.tgz)
+          mkdir -p /tmp/bun-consumer-native /tmp/bun-consumer-wasm
+          cd /tmp/bun-consumer-native
+          bun -e '
+            const [wasm, js, ts] = process.argv.slice(1);
+            await Bun.write("package.json", JSON.stringify({
+              name: "bun-consumer-native",
+              type: "module",
+              dependencies: {
+                "@polylib/polylib": "file:" + ts,
+                "@polylib/polylib-wasm": "file:" + wasm,
+                "@polylib/polylib-js": "file:" + js
+              },
+              overrides: {
+                "@polylib/polylib-wasm": "file:" + wasm,
+                "@polylib/polylib-js": "file:" + js
+              }
+            }, null, 2));
+          ' "${wasm_files[0]}" "${js_files[0]}" "${ts_files[0]}"
+          bun install --offline
+          bun -e '
+            import * as facade from "@polylib/polylib";
+            import * as facadeWasm from "@polylib/polylib/wasm";
+            import * as wasmPkg from "@polylib/polylib-wasm";
+            import * as napiPkg from "@polylib/polylib-js";
+            if (facade.BACKEND !== "native" || facade.getEngineVersion() !== facade.VERSION) throw new Error("facade mismatch");
+            if (facade.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade slug mismatch");
+            if (facadeWasm.BACKEND !== "wasm" || facadeWasm.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade/wasm mismatch");
+            if (wasmPkg.getWasmVersion() !== wasmPkg.VERSION) throw new Error("wasm version mismatch");
+            if (napiPkg.getNativeVersion() !== napiPkg.VERSION) throw new Error("napi version mismatch");
+            const s = facade.summarizeScores([10, 20, 30]);
+            if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
+          '
+          cd /tmp/bun-consumer-wasm
+          bun -e '
+            const [wasm, ts] = process.argv.slice(1);
+            await Bun.write("package.json", JSON.stringify({
+              name: "bun-consumer-wasm",
+              type: "module",
+              dependencies: {
+                "@polylib/polylib": "file:" + ts,
+                "@polylib/polylib-wasm": "file:" + wasm
+              },
+              overrides: {
+                "@polylib/polylib-wasm": "file:" + wasm
+              }
+            }, null, 2));
+          ' "${wasm_files[0]}" "${ts_files[0]}"
+          bun install --offline --omit=optional
+          bun -e '
+            import * as facade from "@polylib/polylib";
+            if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
+          '
+
+  uniffi-kotlin-ruby:
+    name: UniFFI Bindings (Kotlin JVM & Ruby)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Pixi ffi environment & Rust cache
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: ffi
+          cache-key: ci-uniffi-linux
+
+      - name: Build UniFFI bindings for Kotlin, Swift, and Ruby
+        run: pixi run -e ffi tools run ffi build
+
+      - name: Run Kotlin & Ruby unit + shared Gherkin conformance suites with coverage (>= 90%)
+        run: |
+          pixi run -e ffi tools run ffi test --target kotlin --coverage
+          pixi run -e ffi tools run ffi test --target ruby --coverage
+
+      - name: Upload Kotlin coverage artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-kotlin
+          path: coverage/kotlin/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Ruby coverage artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-ruby
+          path: coverage/ruby/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Kotlin coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage/kotlin/jacoco.xml
+          flags: kotlin
+          name: coverage-kotlin
+          fail_ci_if_error: false
+
+      - name: Upload Ruby coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage/ruby/lcov.info
+          flags: ruby
+          name: coverage-ruby
+          fail_ci_if_error: false
+
+      - name: Verify Kotlin JAR, Ruby isolated gem, and Swift C-ABI compatibility
+        run: pixi run -e ffi tools run ffi compat
+
+      - name: Stage Kotlin JAR + runtime classpath and Ruby gem for version matrices
+        run: |
+          mkdir -p dist-kt dist-rb
+          cp packages/polylib-kt/build/libs/polylib-*.jar dist-kt/
+          IFS=: read -r -a cp_jars < packages/polylib-kt/build/runtime-classpath.txt
+          for jar in "${cp_jars[@]}"; do
+            if [ -f "$jar" ]; then
+              cp "$jar" dist-kt/
+            fi
+          done
+          pixi run -e ffi tools run release pack --target ruby --output-dir dist-rb
+
+      - name: Upload Kotlin runtime bundle for JDK compatibility matrix
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: polylib-kt-dist
+          path: dist-kt/*.jar
+          retention-days: 1
+
+      - name: Upload Ruby gem for Ruby compatibility matrix
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: polylib-rb-gem
+          path: dist-rb/ruby/*.gem
+          retention-days: 1
+
+  java-versions:
+    name: JVM / Kotlin Compatibility (JDK ${{ matrix.java-version }})
+    needs: [uniffi-kotlin-ruby]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        java-version: ["17", "21", "25"]
+    steps:
+      - name: Setup JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java-version }}
+
+      - name: Download Kotlin JAR and runtime classpath
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: polylib-kt-dist
+          path: dist-kt
+
+      - name: Compile and run standalone JVM consumer without -Djna.library.path
+        run: |
+          mkdir -p /tmp/jvm-consumer
+          cat > /tmp/jvm-consumer/SmokeTest.java <<'EOF'
+          import dev.polylib.Polylib;
+          import dev.polylib.ScoreSummary;
+          import java.util.List;
+
+          public class SmokeTest {
+              public static void main(String[] args) {
+                  if (!Polylib.VERSION.equals(Polylib.INSTANCE.ffiVersion())) {
+                      throw new AssertionError("Version mismatch");
+                  }
+                  String slug = Polylib.INSTANCE.normalizeSlug("Hello JDK Matrix!");
+                  if (!"hello-jdk-matrix".equals(slug)) {
+                      throw new AssertionError("Unexpected slug: " + slug);
+                  }
+                  ScoreSummary summary = Polylib.INSTANCE.summarizeScores(List.of(10.0, 20.0, 30.0));
+                  if (summary.getCount() != 3L || summary.getMean() != 20.0) {
+                      throw new AssertionError("Unexpected summary: " + summary);
+                  }
+              }
+          }
+          EOF
+          javac -cp "$GITHUB_WORKSPACE/dist-kt/*" /tmp/jvm-consumer/SmokeTest.java
+          java -cp "/tmp/jvm-consumer:$GITHUB_WORKSPACE/dist-kt/*" SmokeTest
+
+  ruby-versions:
+    name: Ruby Gem Compatibility (Ruby ${{ matrix.ruby-version }})
+    needs: [uniffi-kotlin-ruby]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby-version: ["3.2", "3.3", "3.4"]
+    steps:
+      - name: Setup Ruby ${{ matrix.ruby-version }}
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+
+      - name: Download packed Ruby gem
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: polylib-rb-gem
+          path: dist-rb
+
+      - name: Install gem and verify Polylib FFI across Ruby ${{ matrix.ruby-version }}
+        run: |
+          gems=(dist-rb/*.gem)
+          gem install --no-document ffi "${gems[0]}"
+          ruby -e '
+            require "polylib"
+            raise "version" unless Polylib::VERSION.match?(/\A\d+\.\d+\.\d+/)
+            raise "slug" unless Polylib.normalize_slug("Hello Ruby Matrix!") == "hello-ruby-matrix"
+            s = Polylib.summarize_scores([10.0, 20.0, 30.0])
+            raise "summary" unless s.count == 3 && s.mean == 20.0
+          '
+
+  swift-versions:
+    name: Swift Compatibility (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS-15 (Swift 6)
+            os: macos-15
+            setup_swift: false
+            swift_version: ""
+          - label: Linux (Swift 6.1)
+            os: ubuntu-latest
+            setup_swift: true
+            swift_version: "6.1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Swift ${{ matrix.swift_version }} on Linux
+        if: ${{ matrix.setup_swift }}
+        uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
+        with:
+          swift-version: ${{ matrix.swift_version }}
+
+      - name: Setup Pixi rust environment & Rust cache
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: rust
+          cache-key: ci-uniffi-swift-${{ matrix.os }}
+
+      - name: Build Swift UniFFI bindings and run SwiftPM conformance tests with coverage (>= 90%)
+        run: |
+          pixi run -e rust tools run ffi build --target swift
+          pixi run -e rust tools run ffi test --target swift --require-swift --coverage
+          pixi run -e rust tools run ffi compat --target swift
+
+      - name: Upload Swift coverage artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-swift-${{ matrix.os }}
+          path: coverage/swift/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Swift coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage/swift/lcov.info
+          flags: swift
+          name: coverage-swift-${{ matrix.os }}
+          fail_ci_if_error: false
+
+  cross-os:
+    name: Cross-OS Polyglot Matrix (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup full environment & build bindings
+        uses: ./.github/actions/setup-bindings
+        with:
+          cache-key: ci-cross-os-${{ matrix.os }}
+
+      - name: Run full polyglot test and compatibility suites
+        shell: bash
+        run: |
+          pixi run -e full tools run test
+          pixi run -e full tools run rust compat
+          pixi run -e full tools run python compat
+          pixi run -e full tools run ts compat
+
+  ci-gate:
+    name: CI Required Gate
+    if: always()
+    needs:
+      - quality
+      - rust
+      - rust-msrv
+      - polyglot-bindings
+      - python-versions
+      - node-versions
+      - bun-versions
+      - uniffi-kotlin-ruby
+      - java-versions
+      - ruby-versions
+      - swift-versions
+      - cross-os
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all CI jobs succeeded
+        run: |
+          statuses="${{ join(needs.*.result, ',') }}"
+          echo "Job results: $statuses"
+          for s in $(echo "$statuses" | tr ',' ' '); do
+            if [ "$s" != "success" ]; then
+              echo "CI gate failed: detected status '$s'"
+              exit 1
+            fi
+          done
