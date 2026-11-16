@@ -60,6 +60,11 @@ jobs:
       - name: Build static Fumadocs export (apps/docs/out)
         run: pixi run -e docs tools run docs build
 
+      # The lint steps above check the MDX as text, so a site that compiles the MDX but
+      # never renders it still passes. This step checks the export itself.
+      - name: Verify the export contains every content page
+        run: pixi run -e docs tools run docs export
+
       - name: Detect GitHub Pages availability
         id: pages-status
         env:

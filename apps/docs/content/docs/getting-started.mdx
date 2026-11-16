@@ -1,0 +1,59 @@
+---
+title: Getting started
+description: Install the workspace, run the checks, and ship a change across every language binding.
+---
+
+## Prerequisites
+
+The repository pins every tool it needs through Pixi, and every JavaScript
+dependency through Bun. Install both once:
+
+- **Pixi** `v0.84.2` or newer.
+- **Bun** `1.4.2` or newer.
+
+## Install the workspace
+
+Run the locked install so the workspace matches `bun.lock` exactly:
+
+```sh
+pixi run -e full tools run repo install
+```
+
+The install is frozen. A manifest change without a matching lock update fails here
+rather than at release time.
+
+## Run the checks
+
+The tasknest tasks are grouped by domain, and every one of them is also a single
+`pixi run tools run ...` command:
+
+| Task | Command | What it does |
+| :--- | :--- | :--- |
+| Rust | `pixi run tools run rust test` | Builds and tests every crate, including the minimum supported Rust version proof. |
+| Python | `pixi run tools run python test` | Builds the wheel and runs the pytest suite. |
+| TypeScript | `pixi run tools run ts test` | Runs the Bun and Node suites across every facade. |
+| Bindings | `pixi run tools run bindings test` | Verifies the Kotlin, Swift, and Ruby bindings. |
+| Docs | `pixi run tools run docs md` | Lints the Markdown and `MDX` sources. |
+| Policy | `pixi run tools run repo policy` | Runs the declarative repository policy suite. |
+
+## Add a core function
+
+The deterministic logic lives in exactly one place, `crates/polylib-core`. Add the
+function there, then let the bindings forward to it:
+
+1. Add the function to `crates/polylib-core/src/lib.rs` and return a typed error
+   from `CoreError` when the input is invalid.
+2. Re-export it from the `crates/polylib` facade so every binding can reach it.
+3. Add the matching entry in each binding package under `packages/`.
+4. Extend the shared Gherkin scenarios in `conformance/` so every language proves
+   the same behavior.
+
+The conformance suite is the contract. A binding that drifts from the core fails
+the shared scenarios rather than its own unit tests.
+
+## Release
+
+The build workflow compiles every target, writes `report.json`, renders `report.md`
+from it, and produces `SHA256SUMS.txt`. The publish workflow then releases each
+target in its own isolated environment, so a failure in one registry never blocks
+another.

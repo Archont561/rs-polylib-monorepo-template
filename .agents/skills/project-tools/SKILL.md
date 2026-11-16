@@ -39,6 +39,10 @@ Check README.md, AGENTS.md, and .github templates against templates/.
 Run package.json script &#39;dev&#39; in apps/docs.
 - Persistent: true
 
+### `pixi run tools run docs export` (`docs.export`)
+Verify the built docs export contains every content page.
+- Marks: fast, ci, docs
+
 ### `pixi run tools run docs links` (`docs.links`)
 Verify documentation links using lychee.
 - Marks: fast, ci, docs
