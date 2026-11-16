@@ -46,6 +46,14 @@ rude-clean-code = "==0.4.0"
 [feature.py.activation.env]
 PYTHONPATH = "$PIXI_PROJECT_ROOT/packages/polylib-py/src"
 
+# Pixi expands `$VAR` in activation env vars with the shell of the platform:
+# `$PIXI_PROJECT_ROOT` resolves on Unix, but on Windows the activation runs
+# under cmd.exe, which expands `%PIXI_PROJECT_ROOT%` and leaves `$PIXI_PROJECT_ROOT`
+# as literal text. Override the value for win-64 so the Python package stays
+# importable there.
+[feature.py.target.win-64.activation.env]
+PYTHONPATH = "%PIXI_PROJECT_ROOT%/packages/polylib-py/src"
+
 [feature.lint.dependencies]
 actionlint = ">=1.7,<2"
 convco = ">=0.7,<1"
