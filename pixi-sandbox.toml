@@ -10,5 +10,10 @@ max_restore_required_mib = 8192
 
 [[bundle]]
 name = "developer"
-environments = ["default", "js", "lint", "docs", "rust", "full"]
+# `full` already carries the `rust` feature and shares the `rust` solve group
+# with the `rust` environment, so the two resolve to the same Rust toolchain.
+# Packing both stores that toolchain twice and pushes the transport past
+# `max_transport_mib` and `max_restore_required_mib`; the developer sandbox
+# needs the toolchain only once.
+environments = ["default", "js", "lint", "docs", "full"]
 platforms = ["linux-64"]
