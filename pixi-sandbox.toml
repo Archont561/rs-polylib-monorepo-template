@@ -8,6 +8,18 @@ max_transport_mib = 2048
 max_repository_push_mib = 2048
 max_restore_required_mib = 8192
 
+# Policy for the generated publisher workflow.
+#
+# Without a `[workflow]` table the generated workflow triggers on every push to
+# main, so a README typo repacks the whole transport and force-pushes the
+# sandbox branch. `push_paths` is left unset so the tool derives the allowlist
+# from the known transport inputs (this file, `pixi.toml`, `pixi.lock`, and the
+# manifests that feed the environments).
+[workflow]
+# Scope the workflow to least privilege: `contents: read` at the top level and
+# `contents: write` only on the job that pushes the sandbox branch.
+permissions = true
+
 [[bundle]]
 name = "developer"
 # The `default` environment carries every feature the other environments add

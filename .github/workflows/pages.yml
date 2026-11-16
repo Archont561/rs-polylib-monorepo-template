@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "apps/docs/**"
+      - "tools/**"
       - "README.md"
       - "templates/**"
       - "package.json"

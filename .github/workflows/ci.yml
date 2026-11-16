@@ -1,10 +1,72 @@
 name: CI
 
+# The suite reads the sources, the manifests, the shared conformance
+# specifications, and the policy configuration. A change that touches none of
+# them cannot change any result, so the paths below keep a change to, say, the
+# issue templates from spending 23 jobs on a green result.
 on:
   push:
     branches:
       - main
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "apps/**"
+      - "tools/**"
+      - "templates/**"
+      - "conformance/**"
+      - "scripts/**"
+      - "skills/**"
+      - ".agents/**"
+      - ".alint/**"
+      - ".cargo/**"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
+      - "pyproject.toml"
+      - "pixi.toml"
+      - "pixi.lock"
+      - "pixi-sandbox.toml"
+      - "tox.ini"
+      - "deny.toml"
+      - "biome.json"
+      - "lefthook.yml"
+      - "README.md"
+      - "AGENTS.md"
   pull_request:
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "apps/**"
+      - "tools/**"
+      - "templates/**"
+      - "conformance/**"
+      - "scripts/**"
+      - "skills/**"
+      - ".agents/**"
+      - ".alint/**"
+      - ".cargo/**"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "bun.lock"
+      - "pyproject.toml"
+      - "pixi.toml"
+      - "pixi.lock"
+      - "pixi-sandbox.toml"
+      - "tox.ini"
+      - "deny.toml"
+      - "biome.json"
+      - "lefthook.yml"
+      - "README.md"
+      - "AGENTS.md"
   workflow_dispatch:
 
 permissions:
@@ -203,6 +265,10 @@ jobs:
 
   python-versions:
     name: Python Compatibility (tox ${{ matrix.tox }})
+    # The version matrices prove the compatibility promise on every pull request.
+    # A push to main repeats the same code against the same matrices, so the
+    # main push runs the single-job checks only.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -245,6 +311,7 @@ jobs:
   node-versions:
     name: Node.js ESM+WASM+NAPI Compatibility (Node ${{ matrix.node-version }})
     needs: [polyglot-bindings]
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -334,6 +401,7 @@ jobs:
   bun-versions:
     name: Bun Compatibility (Bun ${{ matrix.bun-version }})
     needs: [polyglot-bindings]
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -537,6 +605,7 @@ jobs:
   java-versions:
     name: JVM / Kotlin Compatibility (JDK ${{ matrix.java-version }})
     needs: [uniffi-kotlin-ruby]
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -586,6 +655,7 @@ jobs:
   ruby-versions:
     name: Ruby Gem Compatibility (Ruby ${{ matrix.ruby-version }})
     needs: [uniffi-kotlin-ruby]
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -618,6 +688,7 @@ jobs:
 
   swift-versions:
     name: Swift Compatibility (${{ matrix.label }})
+    if: github.event_name != 'push'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -676,6 +747,7 @@ jobs:
 
   cross-os:
     name: Cross-OS Polyglot Matrix (${{ matrix.os }})
+    if: github.event_name != 'push'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
@@ -736,12 +808,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Verify all CI jobs succeeded
+        env:
+          # A push to main skips the version matrices, so their results are
+          # `skipped` rather than `success`. On a pull request every job must
+          # have run and passed.
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           statuses="${{ join(needs.*.result, ',') }}"
           echo "Job results: $statuses"
           for s in $(echo "$statuses" | tr ',' ' '); do
-            if [ "$s" != "success" ]; then
-              echo "CI gate failed: detected status '$s'"
-              exit 1
-            fi
+            case "$s" in
+              success)
+                ;;
+              skipped)
+                if [ "$EVENT_NAME" = "push" ]; then
+                  continue
+                fi
+                echo "CI gate failed: job was skipped"
+                exit 1
+                ;;
+              *)
+                echo "CI gate failed: detected status '$s'"
+                exit 1
+                ;;
+            esac
           done
