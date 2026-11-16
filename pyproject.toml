@@ -1,0 +1,65 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "S", "PT", "TC"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["polylib", "tools"]
+
+[tool.ruff.lint.per-file-ignores]
+"packages/polylib-py/tests/**/*.py" = ["S101"]
+"tests/**/*.py" = ["S101"]
+"tools/**/*.py" = ["PT", "S603", "S607", "S701"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+explicit_package_bases = true
+mypy_path = "packages/polylib-py/src"
+
+[[tool.mypy.overrides]]
+module = ["tasknest", "tasknest.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tools.*"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["packages/polylib-py/tests"]
+markers = [
+  "bdd: Behavior-driven Gherkin scenarios",
+  "conformance: Cross-language conformance vectors",
+  "property: Hypothesis property-based tests",
+]
+
+# rude-clean-code is loaded via Rude's plugin entry point.
+[tool.rude]
+select = ["C901", "CC0", "CC1", "CC2", "CC3", "CC4", "CC5", "CC6", "CC7", "CC8", "CC9"]
+
+[tool.rude.rules.CC101]
+max_lines = 30
+
+[tool.rude.rules.CC103]
+max_returns = 5
+
+[tool.rude.rules.CC606]
+min_attribute_reads = 2
+
+[tool.rude.rules.CC906]
+require_reason_for = ["CC"]
+
+# Every public task under tools/ (excluding tools/_lib/ helpers) must use @tool.
+[tool.rude.rules.CC804]
+handler_paths = ["tools/"]
+exclude_paths = ["tools/_lib/", "tools/_*.py"]
+required_decorator = "tool"
+ignore_private = true
+
+# Runtime Python library code must never import repository automation or test frameworks.
+[[tool.rude.rules.CC704.forbidden]]
+from_paths = ["packages/polylib-py/src/"]
+forbidden_modules = ["tools", "pytest", "hypothesis"]
