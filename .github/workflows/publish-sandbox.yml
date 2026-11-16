@@ -135,6 +135,40 @@ jobs:
           --transport-dir "${{ runner.temp }}/pixi-sandbox-transport"
           --log-dir "${{ runner.temp }}/pixi-sandbox-logs"
 
+      - name: Report publish diagnostic log
+        if: always()
+        shell: bash
+        # The artifact keeps the log, but a failing job is easier to diagnose when the
+        # reason is in the job output itself. The pixi-sandbox diagnostic log records the
+        # failing phase and the full error chain, so it is echoed as one annotation.
+        run: |
+          set +e
+          log_dir="${{ runner.temp }}/pixi-sandbox-logs"
+          for log in "$log_dir"/*.log; do
+            [ -f "$log" ] || continue
+            echo "--- $(basename "$log") ---"
+            cat "$log"
+          done
+          {
+            echo "### publish diagnostics"
+            echo ""
+            echo '```'
+            for log in "$log_dir"/*.log; do
+              [ -f "$log" ] || continue
+              echo "--- $(basename "$log") ---"
+              cat "$log"
+            done
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY" 2>/dev/null
+          if [ -d "$log_dir" ]; then
+            tail -n 60 "$log_dir"/*.log 2>/dev/null \
+              | tr '\r' '\n' \
+              | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g' \
+              | sed -e '$!s/$/%0A/' \
+              | tr -d '\n' \
+              | { read -r body || true; [ -n "$body" ] && echo "::error title=publish diagnostics::${body}"; }
+          fi
+
       - name: Upload publish diagnostic log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
