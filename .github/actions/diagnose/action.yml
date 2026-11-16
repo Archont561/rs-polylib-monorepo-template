@@ -41,14 +41,16 @@ runs:
           # the lines that immediately follow them, because a parser error
           # usually spells out the reason on the next line.
           {
-            grep -n -A 4 -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal)' "$log" \
+            grep -n -A 6 -i -E '(^|[^a-z])(error|failed|denied|not allowed|unlicensed|fatal|exception|traceback)' "$log" \
               || head -n 12 "$log"
             echo '--- context ---'
-            head -n 12 "$log"
+            head -n 6 "$log"
+            echo '--- tail ---'
+            tail -n 12 "$log"
           } \
             | tr '\r' '\n' \
             | grep -v '^$' \
-            | head -n 8 \
+            | head -n 10 \
             | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g' \
             | while IFS= read -r line; do
                 echo "::error title=${DIAG_LABEL} failed::${line}"
