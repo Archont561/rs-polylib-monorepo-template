@@ -10,8 +10,8 @@ workflow-level filter does not, so a required check never sits pending.
 Usage:
     detect_changes.py --profile ci [--filters PATH] [--changed PATH]
 
-The `changed` file is a newline-separated list of paths. When it is omitted the
-script computes it from the pull-request or push that triggered the run.
+The `changed` file holds one path per line. When it is omitted the script
+derives the list from the pull request or push that started the run.
 """
 
 from __future__ import annotations
@@ -20,16 +20,19 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+_GIT = shutil.which("git") or "git"
 
 
 def to_regex(pattern: str) -> re.Pattern[str]:
     """Translate a workflow path-filter pattern into a regular expression.
 
-    `**` crosses directory boundaries, `*` and `?` stop at one, which is what
-    the workflow-level `paths` filter accepts.
+    `**` crosses directory boundaries while `*` and `?` stop at one, which is
+    what the workflow-level `paths` filter accepts.
     """
     out: list[str] = []
     index = 0
@@ -52,47 +55,42 @@ def to_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("^" + "".join(out) + "$")
 
 
+def _diff(*args: str) -> list[str] | None:
+    """Return the paths a git diff reports, or None when the range is unknown."""
+    result = subprocess.run(  # noqa: S603 - fixed argv, no untrusted input
+        [_GIT, "diff", "--name-only", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
 def changed_paths() -> list[str]:
-    """Return the paths a pull request or push changed."""
+    """Return the paths the pull request or push changed."""
     base = os.environ.get("PR_BASE_SHA") or ""
     head = os.environ.get("PR_HEAD_SHA") or ""
     before = os.environ.get("PUSH_BEFORE_SHA") or ""
 
     if not base:
-        if before and set(before) != {"0"}:
-            base = before
-        else:
-            base = "HEAD~1"
+        base = before if before and set(before) != {"0"} else "HEAD~1"
 
     if not head:
         head = "HEAD"
 
     # The three-dot form compares against the merge base, which is what the
     # workflow-level filter does for a pull request.
-    for args in (["git", "diff", "--name-only", f"{base}...{head}"],):
-        result = subprocess.run(args, capture_output=True, text=True, check=False)
-        if result.returncode == 0:
-            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-    result = subprocess.run(
-        ["git", "diff", "--name-only", base, head],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode == 0:
-        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    for args in ((f"{base}...{head}",), (base, head), ("HEAD~1", "HEAD")):
+        paths = _diff(*args)
+        if paths is not None:
+            return paths
+    return []
 
 
 def main() -> int:
+    """Write one output per filter and return the process status."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", required=True, help="Filters section to use.")
     parser.add_argument(
@@ -111,11 +109,8 @@ def main() -> int:
     filters = json.loads(Path(args.filters).read_text(encoding="utf-8"))[args.profile]
 
     if args.changed:
-        changed = [
-            line.strip()
-            for line in Path(args.changed).read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        text = Path(args.changed).read_text(encoding="utf-8")
+        changed = [line.strip() for line in text.splitlines() if line.strip()]
     else:
         changed = changed_paths()
 
@@ -125,12 +120,9 @@ def main() -> int:
 
     results: dict[str, bool] = {}
     for name, patterns in filters.items():
-        if isinstance(patterns, str):
-            patterns = [patterns]
-        regexes = [to_regex(pattern) for pattern in patterns]
-        results[name] = any(
-            regex.match(path) for regex in regexes for path in changed
-        )
+        candidates = [patterns] if isinstance(patterns, str) else patterns
+        regexes = [to_regex(pattern) for pattern in candidates]
+        results[name] = any(regex.match(path) for regex in regexes for path in changed)
 
     print("Detected:")
     for name, hit in results.items():
