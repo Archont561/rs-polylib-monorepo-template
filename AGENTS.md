@@ -1,0 +1,57 @@
+<!--
+  Generated file — do not edit AGENTS.md by hand.
+
+  Source template : templates/AGENTS.md.j2
+  Generator       : Jinja2 via tools/docs/write.py
+  Regenerate with : pixi run tools run docs write
+  Verify in CI    : pixi run tools run docs check
+-->
+
+# Agent guidelines (`polyglot-lib-template`)
+
+Read this file before editing code, manifests, or workflows.
+
+## Core invariants
+
+1. **Single automation entrypoint:** Always run repository automation via `pixi run [-e <env>] tools ...` (Tasknest `0.4.0`). Never add extra tasks to `pixi.toml` or `"scripts"` to root `package.json`.
+2. **Rust-first core:** Put shared domain logic once in `crates/polylib-core` (`#![forbid(unsafe_code)]`). Keep `crates/polylib` as a thin metacrate facade and keep `crates/polylib-py`, `crates/polylib-wasm`, `crates/polylib-js`, and `crates/polylib-ffi` as thin binding layers. Expose the unified TypeScript facade through `packages/polylib-ts` (`@polylib/polylib`) and the `UniFFI` wrappers through `packages/polylib-kt`, `packages/polylib-swift`, and `packages/polylib-rb`.
+3. **Cross-language parity:** Update Gherkin `conformance/*.feature` specs (linted with `gherlint`) whenever changing public API behavior. Rust, Python, TypeScript, Kotlin, Swift, and Ruby conformance runners prove identical outputs and error codes.
+4. **No parent traversals in TS:** Use `@/`, `@polylib/<pkg>`, or `./` imports (enforced by Biome and `.alint.yml`).
+5. **Python Clean Code:** All nested tasks under `tools/{bindings,docs,ffi,python,release,repo,rust,security,ts}/*.py` must carry `@tool` (`rude-clean-code` `CC804`), pass `ruff`, strict `mypy`, and `rude check`. Shared helpers live under `tools/_lib/`.
+6. **Generated files:** Never hand-edit `README.md`, `AGENTS.md`, `.github/ISSUE_TEMPLATE/*`, `.github/PULL_REQUEST_TEMPLATE.md`, `.agents/skills/project-tools/SKILL.md`, `scripts/restore.sh`, `.github/workflows/publish-sandbox.yml`, or `.github/workflows/relock.yml`. Edit their sources (`templates/`, `tools/`, `pixi-sandbox.toml`) and regenerate via `docs write`, `pixi run tools skill --write`, or `repo sandbox --action init`.
+
+## Workspace inventory
+
+- **Version:** `0.1.0` (Rust MSRV `1.88`)
+- **Rust crates:** `crates/polylib`, `crates/polylib-core`, `crates/polylib-ffi`, `crates/polylib-js`, `crates/polylib-py`, `crates/polylib-wasm`
+- **Python packages:** `packages/polylib-py`
+- **TypeScript packages:** `@polylib/config`, `@polylib/polylib-js`, `@polylib/polylib`, `@polylib/polylib-wasm`
+- **UniFFI packages:** `packages/polylib-kt`, `packages/polylib-rb`, `packages/polylib-swift`
+- **Docs apps:** `apps/docs`
+
+## Verification commands
+
+```sh
+pixi run -e full tools check
+pixi run -e full tools skill --check
+pixi run -e full tools run bindings build
+pixi run -e full tools run check
+pixi run -e full tools run test
+pixi run -e full tools run coverage
+pixi run -e full tools run compat
+pixi run -e full tools run tox --list-only
+pixi run -e full tools run rust compat
+pixi run -e full tools run rust tox
+pixi run -e full tools run python compat
+pixi run -e full tools run python tox
+pixi run -e full tools run ts compat
+pixi run -e full tools run ts tox
+pixi run -e ffi tools run ffi build
+pixi run -e ffi tools run ffi test
+pixi run -e ffi tools run ffi compat
+pixi run -e ffi tools run ffi tox
+```
+
+## Agent skills
+
+Installed skills live under `.agents/skills/` (pinned by `skills-lock.json`), including the generated [`project-tools` skill](.agents/skills/project-tools/SKILL.md) and the custom [`tasknest` authoring skill](.agents/skills/tasknest/SKILL.md).
