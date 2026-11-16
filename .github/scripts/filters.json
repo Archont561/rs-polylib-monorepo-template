@@ -123,12 +123,7 @@
       "bunfig.toml",
       ".github/workflows/security.yml"
     ],
-    "codeql-rust": [
-      "crates/**",
-      "Cargo.toml",
-      "Cargo.lock",
-      ".github/workflows/security.yml"
-    ],
+    "codeql-rust": ["crates/**", "Cargo.toml", "Cargo.lock", ".github/workflows/security.yml"],
     "codeql-python": [
       "crates/polylib-py/**",
       "packages/polylib-py/**",
@@ -147,8 +142,6 @@
       "bunfig.toml",
       ".github/workflows/security.yml"
     ],
-    "codeql-actions": [
-      ".github/**"
-    ]
+    "codeql-actions": [".github/**"]
   }
 }
