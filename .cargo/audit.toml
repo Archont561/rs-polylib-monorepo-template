@@ -1,0 +1,7 @@
+# cargo-audit configuration (RustSec advisories)
+[advisories]
+ignore = []
+informational_warnings = ["unmaintained", "unsound", "yanked"]
+
+[output]
+deny = ["warnings"]
