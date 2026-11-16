@@ -19,12 +19,12 @@ Run the locked install so the workspace matches `bun.lock` exactly:
 pixi run -e full tools run repo install
 ```
 
-The install is frozen. A manifest change without a matching lock update fails here
-rather than at release time.
+The install uses a frozen lockfile. A manifest change without a matching lock update
+fails here rather than at release time.
 
 ## Run the checks
 
-The tasknest tasks are grouped by domain, and every one of them is also a single
+The Tasknest tasks group by domain, and each one runs as a single
 `pixi run tools run ...` command:
 
 | Task | Command | What it does |
