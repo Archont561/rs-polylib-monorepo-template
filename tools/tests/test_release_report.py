@@ -21,6 +21,9 @@ from tools._lib.release import (
     read_workspace_version,
 )
 
+# Tests must not depend on the directory Pytest was invoked from.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_empty_checks_spec_reports_not_run() -> None:
     """An empty spec must not fabricate a passing build."""
@@ -120,14 +123,14 @@ def test_unverified_artifact_blocks_publish_readiness(tmp_path: Path) -> None:
     art.mkdir()
     (art / "mystery.bin").write_bytes(b"\x00\x01\x02")
     records = _collect_artifact_records(art)
-    payload = _build_report_payload(Path("."), records, ReportMetadata(checks_spec="build=passed"))
+    payload = _build_report_payload(_REPO_ROOT, records, ReportMetadata(checks_spec="build=passed"))
     assert payload["schema_version"] == 2
     # A `.bin` classifies as `other` with no content check, so it stays verified.
     # Force the unverified path with a wheel that has no metadata.
     (art / "broken-1.0-py3-none-any.whl").write_bytes(b"not a zip")
     records = _collect_artifact_records(art)
     assert any(not item["verified"] for item in records)
-    payload = _build_report_payload(Path("."), records, ReportMetadata(checks_spec="build=passed"))
+    payload = _build_report_payload(_REPO_ROOT, records, ReportMetadata(checks_spec="build=passed"))
     assert payload["publish_ready"] is False
     assert payload["blocking"]
 
@@ -138,7 +141,7 @@ def test_all_passing_checks_and_verified_artifacts_set_publish_ready(tmp_path: P
     art.mkdir()
     (art / "note.txt").write_text("hello", encoding="utf-8")
     records = _collect_artifact_records(art)
-    payload = _build_report_payload(Path("."), records, ReportMetadata(checks_spec="build=passed"))
+    payload = _build_report_payload(_REPO_ROOT, records, ReportMetadata(checks_spec="build=passed"))
     assert payload["publish_ready"] is True
     assert payload["blocking"] == []
 
@@ -147,7 +150,7 @@ def test_report_json_round_trips(tmp_path: Path) -> None:
     """The payload is JSON-serialisable, which the writer depends on."""
     art = tmp_path / "art"
     art.mkdir()
-    payload = _build_report_payload(Path("."), _collect_artifact_records(art), ReportMetadata())
+    payload = _build_report_payload(_REPO_ROOT, _collect_artifact_records(art), ReportMetadata())
     assert json.loads(json.dumps(payload))["schema_version"] == 2
 
 
@@ -189,7 +192,7 @@ def test_the_build_workflow_vocabulary_parses_end_to_end(tmp_path: Path) -> None
     art = tmp_path / "art"
     art.mkdir()
     payload = _build_report_payload(
-        Path("."), _collect_artifact_records(art), ReportMetadata(checks_spec=spec)
+        _REPO_ROOT, _collect_artifact_records(art), ReportMetadata(checks_spec=spec)
     )
     assert len(payload["checks"]) == 6
     # No artifacts were supplied, so nothing can be published; the point here is
@@ -206,7 +209,7 @@ def test_a_passing_report_renders_under_strict_undefined(tmp_path: Path) -> None
     art.mkdir()
     (art / "polylib-0.1.0.crate").write_bytes(b"")
     out = tmp_path / "out"
-    generate_build_report(Path("."), art, out, ReportMetadata(checks_spec="build-rust=success"))
+    generate_build_report(_REPO_ROOT, art, out, ReportMetadata(checks_spec="build-rust=success"))
     rendered = (out / "report.md").read_text(encoding="utf-8")
     assert "Publish-ready:" in rendered
     assert "`build-rust`" in rendered
@@ -220,7 +223,7 @@ def test_a_blocked_report_lists_its_blockers(tmp_path: Path) -> None:
     art = tmp_path / "art"
     art.mkdir()
     out = tmp_path / "out"
-    generate_build_report(Path("."), art, out, ReportMetadata(checks_spec="build-npm=failure"))
+    generate_build_report(_REPO_ROOT, art, out, ReportMetadata(checks_spec="build-npm=failure"))
     rendered = (out / "report.md").read_text(encoding="utf-8")
     assert "Publish-ready:** `false`" in rendered
     assert "build-npm: failed" in rendered
@@ -244,7 +247,7 @@ def test_the_build_workflow_run_block_succeeds(tmp_path: Path) -> None:
         "build-npm=success,build-uniffi-kotlin-ruby=success,build-uniffi-swift=success"
     )
     out = tmp_path / "dist-report"
-    generate_build_report(Path("."), art, out, ReportMetadata(checks_spec=spec))
+    generate_build_report(_REPO_ROOT, art, out, ReportMetadata(checks_spec=spec))
     payload = json.loads((out / "report.json").read_text(encoding="utf-8"))
     assert payload["publish_ready"] is True
     assert payload["blocking"] == []
@@ -252,3 +255,12 @@ def test_the_build_workflow_run_block_succeeds(tmp_path: Path) -> None:
     report = (out / "report.md").read_text(encoding="utf-8")
     assert "| Gate | Status | Reason |" in report
     assert "`build-uniffi-swift`" in report
+
+
+def test_tests_do_not_depend_on_the_invocation_directory() -> None:
+    """`python test --coverage` runs Pytest from the repo root; a bare `pytest`
+    over both testpaths may not. Anchoring to `__file__` keeps both the same,
+    which is what CI caught when this module used a cwd-relative `Path(".")`."""
+    assert _REPO_ROOT.is_dir()
+    assert (_REPO_ROOT / "Cargo.toml").is_file()
+    assert (_REPO_ROOT / "pyproject.toml").is_file()

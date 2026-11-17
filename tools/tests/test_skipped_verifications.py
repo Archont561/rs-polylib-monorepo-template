@@ -19,6 +19,9 @@ import tools._lib.ffi as ffi_mod
 import tools._lib.ffi_cov as ffi_cov
 from tools._lib.status import Status, publish_ready, render
 
+# Tests must not depend on the directory Pytest was invoked from.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 @pytest.fixture
 def no_toolchains(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,7 +40,7 @@ def test_kotlin_compat_skips_with_a_reason(
     no_toolchains: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Site 1: absent gradle is a skip, and the reason names the binary."""
-    results = compat_ffi.verify_kotlin_compat(Path("."))
+    results = compat_ffi.verify_kotlin_compat(_REPO_ROOT)
     assert [item.status for item in results] == [Status.SKIPPED]
     assert "gradle" in (results[0].reason or "")
     _assert_no_success_words(render(results))
@@ -45,20 +48,20 @@ def test_kotlin_compat_skips_with_a_reason(
 
 def test_kotlin_requires_toolchain_when_asked(no_toolchains: None) -> None:
     """On a runner where the toolchain is expected, absence is a failure."""
-    results = compat_ffi.verify_kotlin_compat(Path("."), require_toolchain=True)
+    results = compat_ffi.verify_kotlin_compat(_REPO_ROOT, require_toolchain=True)
     assert results[0].status is Status.FAILED
 
 
 def test_ruby_compat_skips_with_a_reason(no_toolchains: None) -> None:
     """Site 2: absent gem is a skip, not an unqualified OK."""
-    results = compat_ffi.verify_ruby_compat(Path("."))
+    results = compat_ffi.verify_ruby_compat(_REPO_ROOT)
     assert [item.status for item in results] == [Status.SKIPPED]
     assert "gem" in (results[0].reason or "")
 
 
 def test_swift_c_abi_skips_without_a_compiler(no_toolchains: None) -> None:
     """Site 4: no cc/gcc/clang is a skip that names all three."""
-    result = compat_ffi._verify_swift_c_abi_smoke(Path("."))
+    result = compat_ffi._verify_swift_c_abi_smoke(_REPO_ROOT)
     assert result.status is Status.SKIPPED
     reason = result.reason or ""
     for binary in ("cc", "gcc", "clang"):
@@ -100,7 +103,7 @@ def test_swift_test_with_coverage_skips(no_toolchains: None) -> None:
     """Site 7: absent swift is a skip carrying a reason, not a silent return."""
 
     class _Ctx:
-        repo_root = Path(".")
+        repo_root = _REPO_ROOT
 
     result = ffi_cov.test_swift_with_coverage(_Ctx())
     assert result.status is Status.SKIPPED
