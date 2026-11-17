@@ -65,15 +65,15 @@ Version: `{{ version }}` | Rust MSRV: `{{ msrv }}` | License: [MIT](LICENSE)
 ## What you get
 
 One pure Rust core (`crates/polylib-core`, `#![forbid(unsafe_code)]`) reaches six
-ecosystems. Each target keeps idiomatic packaging, and each is held to the same
-shared Gherkin specs under [`conformance/*.feature`](conformance/slug.feature).
+ecosystems. Each target keeps idiomatic packaging and passes the same shared
+Gherkin specs under [`conformance/*.feature`](conformance/slug.feature).
 
 - **One core, no reimplementation.** Domain logic lives in `crates/polylib-core`;
   every binding is a thin marshalling layer over it.
 - **Conformance before compatibility.** `gherlint`-linted Gherkin scenarios run
   through `rstest-bdd`, `pytest-bdd`, `@aboviq/bun-test-cucumber`, Cucumber-JVM,
-  XCTest, and Cucumber Ruby. A target that disagrees fails, whichever language
-  it is written in.
+  XCTest, and Cucumber Ruby. A target that disagrees fails, whatever the
+  implementation language.
 - **A gate per ecosystem.** Each target has a named compatibility check that
   builds the real artifact and consumes it the way a user would.
 - **Reproducible offline.** `pixi-sandbox.toml` packs the locked Linux
@@ -138,7 +138,7 @@ with `pixi run tools ls`, or ask for one task's options with `pixi run tools hel
 
 ## Task reference
 
-The tasks below are grouped by what they answer. Run any of them with
+These tasks group by the question they answer. Run any of them with
 `pixi run [-e <env>] tools run <task>`.
 
 ### Verify the repository
