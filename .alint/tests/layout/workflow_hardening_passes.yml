@@ -1,0 +1,69 @@
+test_version: 1
+name: a hardened workflow and a reusable-workflow caller both pass the schema
+tags: [check, workflows, hardening, passing]
+
+docs:
+  title: steps jobs need runs-on, timeout, and steps; callers need only uses
+  case: pass
+  kind: json_schema_passes
+
+given:
+  tree:
+    .github:
+      workflows:
+        demo.yml: |
+          name: Demo
+          on:
+            pull_request:
+          permissions:
+            contents: read
+          concurrency:
+            group: demo-${{ github.ref }}
+            cancel-in-progress: true
+          jobs:
+            build:
+              name: Build
+              runs-on: ubuntu-latest
+              timeout-minutes: 15
+              steps:
+                - run: echo hello
+            call:
+              name: Call the reusable build
+              uses: ./.github/workflows/reusable.yml
+    .alint:
+      schemas:
+        github-workflow-hardening.schema.json: |
+          {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "required": ["name", "permissions", "concurrency", "jobs"],
+            "properties": {
+              "jobs": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "object",
+                  "required": ["name"],
+                  "anyOf": [
+                    { "required": ["runs-on", "timeout-minutes", "steps"] },
+                    { "required": ["uses"] }
+                  ]
+                }
+              }
+            }
+          }
+  config: |
+    version: 1
+    rules:
+      - id: schema-github-workflow-hardening
+        kind: json_schema_passes
+        paths:
+          - .github/workflows/demo.yml
+        schema_path: .alint/schemas/github-workflow-hardening.schema.json
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []

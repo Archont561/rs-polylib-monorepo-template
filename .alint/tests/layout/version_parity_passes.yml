@@ -1,0 +1,40 @@
+test_version: 1
+name: matching workspace versions pass the parity rule
+tags: [check, version, parity, passing]
+
+docs:
+  title: Cargo.toml and package.json agree on 0.1.0
+  case: pass
+  kind: cross_file
+
+given:
+  tree:
+    Cargo.toml: |
+      [workspace]
+      members = []
+
+      [workspace.package]
+      version = "0.1.0"
+    package.json: |
+      { "name": "demo", "version": "0.1.0" }
+  config: |
+    version: 1
+    rules:
+      - id: workspace-version-parity
+        kind: cross_file
+        source:
+          file: Cargo.toml
+          extract:
+            toml: $.workspace.package.version
+        targets:
+          - file: package.json
+            extract:
+              json: $.version
+        relation: equals
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []

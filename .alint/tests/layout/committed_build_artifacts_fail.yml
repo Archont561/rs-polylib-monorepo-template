@@ -1,0 +1,31 @@
+test_version: 1
+name: a checked-in dist directory fails the artifact rule
+tags: [check, artifacts, hygiene, failing]
+
+docs:
+  title: build output that reaches the tree is reported
+  case: fail
+  kind: dir_absent
+
+given:
+  tree:
+    README.md: "# demo\n"
+    packages:
+      demo:
+        dist:
+          index.js: "module.exports = {};\n"
+  config: |
+    version: 1
+    rules:
+      - id: forbid-committed-build-artifacts
+        kind: dir_absent
+        paths:
+          - "**/dist"
+        level: error
+
+when: [check]
+
+expect:
+  - exit: policy_failure
+    violations:
+      - { rule: forbid-committed-build-artifacts, level: error }

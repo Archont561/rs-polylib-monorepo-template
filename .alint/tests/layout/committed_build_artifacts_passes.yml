@@ -1,0 +1,31 @@
+test_version: 1
+name: a source tree without build output passes the artifact rule
+tags: [check, artifacts, hygiene, passing]
+
+docs:
+  title: a package that ships only source is not a finding
+  case: pass
+  kind: dir_absent
+
+given:
+  tree:
+    README.md: "# demo\n"
+    packages:
+      demo:
+        src:
+          index.ts: "export const ok = true;\n"
+  config: |
+    version: 1
+    rules:
+      - id: forbid-committed-build-artifacts
+        kind: dir_absent
+        paths:
+          - "**/dist"
+          - apps/docs/out
+        level: error
+
+when: [check]
+
+expect:
+  - exit: success
+    violations: []
