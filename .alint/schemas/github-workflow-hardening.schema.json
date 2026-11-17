@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polylib.local/schemas/github-workflow-hardening.schema.json",
+  "title": "GitHub Actions Workflow Hardening Policy",
+  "description": "Requires a top-level name, explicit least-privilege permissions, a concurrency group, and an explicit timeout on every job. A workflow that omits these inherits GitHub's defaults: a read/write token, unbounded parallelism, and a six-hour timeout, none of which belong in a repository that publishes packages.",
+  "type": "object",
+  "required": ["name", "permissions", "concurrency", "jobs"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "contents": {
+          "enum": ["read", "none"]
+        }
+      },
+      "additionalProperties": {
+        "enum": ["read", "none"]
+      }
+    },
+    "concurrency": {
+      "type": "object",
+      "required": ["group"],
+      "properties": {
+        "group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cancel-in-progress": {}
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timeout-minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90
+          }
+        },
+        "anyOf": [
+          {
+            "description": "A job that runs steps: it must declare its runner and a timeout.",
+            "required": ["runs-on", "timeout-minutes", "steps"]
+          },
+          {
+            "description": "A job that calls a reusable workflow: it has no runner, steps, or timeout of its own.",
+            "required": ["uses"]
+          }
+        ]
+      }
+    }
+  }
+}

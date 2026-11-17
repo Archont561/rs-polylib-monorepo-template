@@ -1,0 +1,41 @@
+test_version: 1
+name: mismatched workspace versions fail the parity rule
+tags: [check, version, parity, failing]
+
+docs:
+  title: Cargo.toml says 0.1.0 while package.json says 9.9.9
+  case: fail
+  kind: cross_file
+
+given:
+  tree:
+    Cargo.toml: |
+      [workspace]
+      members = []
+
+      [workspace.package]
+      version = "0.1.0"
+    package.json: |
+      { "name": "demo", "version": "9.9.9" }
+  config: |
+    version: 1
+    rules:
+      - id: workspace-version-parity
+        kind: cross_file
+        source:
+          file: Cargo.toml
+          extract:
+            toml: $.workspace.package.version
+        targets:
+          - file: package.json
+            extract:
+              json: $.version
+        relation: equals
+        level: error
+
+when: [check]
+
+expect:
+  - exit: policy_failure
+    violations:
+      - { rule: workspace-version-parity, level: error }
