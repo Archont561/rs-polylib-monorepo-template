@@ -20,6 +20,7 @@ from tasknest import ToolError
 from tools._lib.status import Status
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 _UTF8 = "utf-8"
@@ -137,39 +138,65 @@ def _classify_artifact(rel_path: str) -> tuple[str, str]:
     return "other", "GitHub Releases"
 
 
+_WHEEL_SUFFIX = ".whl"
+_JAR_SUFFIX = ".jar"
+
+
+def _check_wheel(path: Path) -> tuple[bool, str]:
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+    ok = any(name.endswith(".dist-info/WHEEL") for name in names) and any(
+        name.endswith(".dist-info/METADATA") for name in names
+    )
+    return ok, "wheel carries .dist-info/WHEEL and METADATA" if ok else "no .dist-info"
+
+
+def _check_crate(path: Path) -> tuple[bool, str]:
+    with tarfile.open(path) as archive:
+        names = archive.getnames()
+    ok = any(name.endswith("Cargo.toml") for name in names)
+    return ok, "crate archive carries Cargo.toml" if ok else "no Cargo.toml in archive"
+
+
+def _check_gem(path: Path) -> tuple[bool, str]:
+    with tarfile.open(path) as archive:
+        names = archive.getnames()
+    ok = any(name.endswith("metadata.gz") for name in names)
+    return ok, "gem carries metadata.gz" if ok else "no metadata.gz in gem"
+
+
+def _check_npm(path: Path) -> tuple[bool, str]:
+    with tarfile.open(path) as archive:
+        names = archive.getnames()
+    ok = "package/package.json" in names
+    return ok, "tarball carries package/package.json" if ok else "no package/package.json"
+
+
+def _check_jar(path: Path) -> tuple[bool, str]:
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+    ok = "META-INF/MANIFEST.MF" in names
+    return ok, "jar carries META-INF/MANIFEST.MF" if ok else "no MANIFEST.MF in jar"
+
+
+_CONTENT_CHECKS: dict[tuple[str, str], Callable[[Path], tuple[bool, str]]] = {
+    ("python", _WHEEL_SUFFIX): _check_wheel,
+    ("rust", ".crate"): _check_crate,
+    ("ruby", ".gem"): _check_gem,
+    ("npm", ".tgz"): _check_npm,
+    (_ECO_KOTLIN, _JAR_SUFFIX): _check_jar,
+}
+
+
 def _verify_artifact(path: Path, ecosystem: str) -> tuple[bool, str]:
     """Check an artifact's contents agree with the ecosystem its extension implies."""
+    check = _CONTENT_CHECKS.get((ecosystem, path.suffix))
+    if check is None:
+        return True, f"no content check defined for {ecosystem}{path.suffix}"
     try:
-        if ecosystem == "python" and path.suffix == ".whl":
-            with zipfile.ZipFile(path) as archive:
-                names = archive.namelist()
-            ok = any(name.endswith(".dist-info/WHEEL") for name in names) and any(
-                name.endswith(".dist-info/METADATA") for name in names
-            )
-            return ok, "wheel carries .dist-info/WHEEL and METADATA" if ok else "no .dist-info"
-        if ecosystem == "rust":
-            with tarfile.open(path) as archive:
-                names = archive.getnames()
-            ok = any(name.endswith("Cargo.toml") for name in names)
-            return ok, "crate archive carries Cargo.toml" if ok else "no Cargo.toml in archive"
-        if ecosystem == "ruby":
-            with tarfile.open(path) as archive:
-                names = archive.getnames()
-            ok = any(name.endswith("metadata.gz") for name in names)
-            return ok, "gem carries metadata.gz" if ok else "no metadata.gz in gem"
-        if ecosystem == "npm":
-            with tarfile.open(path) as archive:
-                names = archive.getnames()
-            ok = "package/package.json" in names
-            return ok, "tarball carries package/package.json" if ok else "no package/package.json"
-        if ecosystem == _ECO_KOTLIN and path.suffix == ".jar":
-            with zipfile.ZipFile(path) as archive:
-                names = archive.namelist()
-            ok = "META-INF/MANIFEST.MF" in names
-            return ok, "jar carries META-INF/MANIFEST.MF" if ok else "no MANIFEST.MF in jar"
+        return check(path)
     except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
         return False, f"could not open the archive: {exc}"
-    return True, f"no content check defined for {ecosystem}{path.suffix}"
 
 
 def _collect_artifact_records(artifacts_dir: Path) -> list[dict[str, Any]]:
