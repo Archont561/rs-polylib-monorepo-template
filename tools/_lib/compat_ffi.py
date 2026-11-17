@@ -36,6 +36,7 @@ _SWIFT_INTERNAL = "PolylibFFIInternal"
 _SWIFT_INCLUDE = "include"
 _SMOKE_RUBY = (
     "require 'polylib'; "
+    "raise 'version' unless Polylib.ffi_version == Polylib::VERSION; "
     "raise 'slug' unless Polylib.normalize_slug('Ruby Gem OK!') == 'ruby-gem-ok'; "
     "s = Polylib.summarize_scores([10.0, 20.0]); "
     "raise 'scores' unless s.count == 2 && s.mean == 15.0"
