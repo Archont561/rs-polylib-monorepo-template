@@ -96,9 +96,7 @@ Run package.json script &#39;build:native&#39; in packages/polylib-js.
 
 ### `pixi run tools run polylib-js dev` (`polylib-js.dev`)
 Run package.json script &#39;dev&#39; in packages/polylib-js.
-
-### `pixi run tools run polylib-js prepack` (`polylib-js.prepack`)
-Run package.json script &#39;prepack&#39; in packages/polylib-js.
+- Persistent: true
 
 ### `pixi run tools run polylib-js test` (`polylib-js.test`)
 Run package.json script &#39;test&#39; in packages/polylib-js.
@@ -124,9 +122,7 @@ Run package.json script &#39;build&#39; in packages/polylib-wasm.
 
 ### `pixi run tools run polylib-wasm dev` (`polylib-wasm.dev`)
 Run package.json script &#39;dev&#39; in packages/polylib-wasm.
-
-### `pixi run tools run polylib-wasm prepack` (`polylib-wasm.prepack`)
-Run package.json script &#39;prepack&#39; in packages/polylib-wasm.
+- Persistent: true
 
 ### `pixi run tools run polylib-wasm test` (`polylib-wasm.test`)
 Run package.json script &#39;test&#39; in packages/polylib-wasm.
