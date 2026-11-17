@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 from tasknest import ToolError
 
-from tools._lib.status import Status
+from tools._lib.status import Status, skipped
 from tools.ffi.test import test_ffi as _test_ffi_task
 
 if TYPE_CHECKING:
@@ -80,9 +80,17 @@ def test_a_selected_lane_that_skipped_blocks_the_run(
     This is the counterpart to the scoped-run test. Kotlin and Ruby run, Swift's
     toolchain is absent, so the run reports one skip and refuses to pass — which
     is what makes an absent toolchain visible instead of silently green.
+
+    Swift is stubbed out rather than left to the ambient machine. CI runners
+    ship a Swift toolchain, so the real lane would build instead of skipping and
+    the test would assert on whichever toolchain the host happens to have.
     """
     monkeypatch.setattr("tools.ffi.test.test_kotlin_with_coverage", lambda *_a, **_k: None)
     monkeypatch.setattr("tools.ffi.test.test_ruby_with_coverage", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "tools.ffi.test.test_swift_with_coverage",
+        lambda *_a, **_k: skipped("swift-test", "`swift` not found on PATH"),
+    )
     with pytest.raises(ToolError, match="FFI tests did not fully pass"):
         _test_ffi(_Ctx(tmp_path), target="all", coverage=True)
     printed = capsys.readouterr().out
