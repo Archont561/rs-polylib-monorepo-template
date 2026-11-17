@@ -3,13 +3,13 @@
 Thanks for taking the time to contribute. This document covers the workflow, the
 commit format that drives releases, and the checks that must pass before a pull
 request merges. For the architectural rules that apply to code changes, read
-[`AGENTS.md`](AGENTS.md) first; this file does not repeat them.
+[`AGENTS.md`](AGENTS.md) first; this file doesn't repeat them.
 
 ## Where to start
 
 - **Bugs and feature requests:** open an issue using the templates under
   [`.github/ISSUE_TEMPLATE`](.github/ISSUE_TEMPLATE).
-- **Security reports:** do not open a public issue. Report the problem privately
+- **Security reports:** don't open a public issue. Report the problem privately
   through GitHub's [private vulnerability reporting](https://github.com/Archont561/rs-polylib-monorepo-template/security/advisories/new)
   so a fix can ship before the details are public.
 - **Questions about the code:** read [`docs/`](docs/README.md), which builds the
@@ -82,7 +82,7 @@ The type decides where the commit appears in the changelog, as declared in
 | `refactor` | Refactoring | A change that alters no external behavior |
 | `revert` | Reverts | Reverting an earlier commit |
 | `docs` | Documentation | Documentation only |
-| `build` | Build System | Cargo, Pixi, or bundler changes |
+| `build` | Build System | Cargo, Pixi, or Bun changes |
 | `ci` | hidden | Workflow and automation changes |
 | `test` | hidden | Test-only changes |
 | `chore` | hidden | Maintenance that fits nothing else |
@@ -124,14 +124,14 @@ pixi run -e lint tools run release changelog --output RELEASE_NOTES.md --tag v0.
 That command runs `convco changelog` against the repository history, applies the
 types and scopes from `.convco`, and appends the build report when
 `--report-md` points at one. `.github/workflows/publish.yml` runs the same
-command and blocks the release if convco cannot produce a changelog, so a
+command and blocks the release if convco can't produce a changelog, so a
 malformed commit message is caught long before a tag is pushed.
 
-Because the changelog is derived from history, the practical rule is simple: a
-commit message that does not parse is a commit that silently disappears from the
+Because the changelog is derived from history, the practical rule is this: a
+commit message that doesn't parse is a commit that disappears from the
 release notes.
 
-## Checks CI runs
+## Continuous integration checks
 
 | Gate | What it covers |
 | :--- | :--- |
@@ -139,7 +139,7 @@ release notes.
 | Rust | Clippy, tests, `cargo-deny`, `.crate` compatibility, MSRV |
 | Python & TypeScript | Bindings, tests, coverage, `publint`/`attw`, isolated consumers |
 | UniFFI | Kotlin, Swift, and Ruby bindings |
-| Compatibility matrices | Python 3.10–3.14, Node 20/22/24, Bun 1.1/1.4/latest, JDK 17/21/25, Ruby 3.2–3.4, Swift |
+| Compatibility matrices | Python 3.10–3.14, Node 20, 22, and 24, Bun 1.1, 1.4, and latest, JDK 17, 21, and 25, Ruby 3.2, 3.3, and 3.4, Swift |
 
 Pushes to `main` skip the version matrices and run the single-job checks only;
 every pull request runs the full set.
@@ -151,7 +151,7 @@ every pull request runs the full set.
   `templates/` or `tools/` and regenerate with `pixi run tools run docs write`.
   `tools run check` fails when a generated file drifts from its source.
 - **One automation entrypoint:** repository automation runs only through
-  `pixi run [-e <env>] tools`. Do not add scripts to root `package.json` or tasks
+  `pixi run [-e <env>] tools`. Don't add scripts to root `package.json` or tasks
   to `pixi.toml`.
 - **Policy as data:** repository rules live in `.alint.yml` with schema tests
   under `.alint/tests/`. Add a rule there rather than hard-coding a check.
