@@ -11,6 +11,13 @@ from pathlib import Path
 
 from tools._lib.compat_ts_node import verify_node_consumers
 from tools._lib.program import resolve_program
+from tools._lib.status import (
+    CheckResult,
+    not_run,
+    passed,
+    publish_ready,
+    render,
+)
 from tools._lib.tarball_ref import tarball_ref
 
 _BUN = "bun"
@@ -321,18 +328,26 @@ def _verify_bun_and_types(
         _check_consumer_runtime_and_types(root, consumer_dir, run_bun=run_bun, run_types=run_types)
 
 
-def verify_ts_compat(root: Path, mode: str = MODE_ALL) -> None:
+def verify_ts_compat(root: Path, mode: str = MODE_ALL) -> list[CheckResult]:
     """Pack and verify npm tarballs (`all`, `pack`, `bun`, `node`, or `types`)."""
     if mode not in VALID_MODES:
         expected = ", ".join(VALID_MODES)
         raise ValueError(f"Unsupported ts compat mode {mode!r}; expected one of: {expected}.")
     lint_pkg = mode in (MODE_ALL, MODE_PACK)
+    results: list[CheckResult] = []
     with tempfile.TemporaryDirectory(prefix="polylib-ts-compat-") as tmp:
         tmp_path = Path(tmp)
         tarballs = {
             spec.pkg_name: _pack_tarball(root, spec, tmp_path, lint_pkg=lint_pkg)
             for spec in _PACKAGES
         }
+        results.append(
+            passed(
+                "ts-tarballs",
+                evidence=f"packed {len(tarballs)} tarballs for "
+                "@polylib/polylib-wasm, @polylib/polylib-js, and @polylib/polylib",
+            )
+        )
         if mode in (MODE_ALL, MODE_BUN, MODE_TYPES):
             _verify_bun_and_types(
                 root,
@@ -342,10 +357,18 @@ def verify_ts_compat(root: Path, mode: str = MODE_ALL) -> None:
                 run_types=mode in (MODE_ALL, MODE_TYPES),
             )
         if mode in (MODE_ALL, MODE_NODE):
-            verify_node_consumers(tmp_path, tarballs, require_node=(mode == MODE_NODE))
-    print(
-        f"ts-compat ({mode}): @polylib/polylib-wasm, @polylib/polylib-js, and @polylib/polylib OK"
-    )
+            results.append(
+                verify_node_consumers(tmp_path, tarballs, require_node=(mode == MODE_NODE))
+            )
+        else:
+            results.append(
+                not_run(
+                    "ts-node-consumers",
+                    f"mode {mode!r} does not include Node.js consumers; "
+                    "re-run with `--mode all` or `--mode node` to exercise them.",
+                )
+            )
+    return results
 
 
 def _main() -> int:
@@ -354,8 +377,9 @@ def _main() -> int:
     args = parser.parse_args()
     script_path = Path(__file__).resolve()
     repo_root = script_path.parents[2]
-    verify_ts_compat(repo_root, mode=args.mode)
-    return 0
+    results = verify_ts_compat(repo_root, mode=args.mode)
+    print(render(results))
+    return 0 if publish_ready(results) else 1
 
 
 if __name__ == "__main__":
