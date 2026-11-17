@@ -227,6 +227,18 @@ def _collect_artifact_records(artifacts_dir: Path) -> list[dict[str, Any]]:
 
 _VALID_CHECK_STATUSES: tuple[str, ...] = tuple(status.value for status in Status)
 
+# The report is fed by `needs.<job>.result`, whose vocabulary is GitHub's, not
+# this project's. Translating on the way in keeps the report's own vocabulary
+# closed while letting the workflow pass what it has.
+_GH_CONCLUSION_ALIASES: dict[str, str] = {
+    "success": Status.PASSED.value,
+    "failure": Status.FAILED.value,
+    "cancelled": Status.FAILED.value,
+    "timed_out": Status.FAILED.value,
+    "action_required": Status.FAILED.value,
+    "skipped": Status.SKIPPED.value,
+}
+
 
 def _parse_checks(raw_checks: str) -> list[dict[str, Any]]:
     """Parse `name=status` pairs, rejecting unknown statuses and unreasoned non-passes.
@@ -249,14 +261,18 @@ def _parse_checks(raw_checks: str) -> list[dict[str, Any]]:
             continue
         name, _, rest = cleaned.partition("=")
         status_text, _, reason = rest.partition(":")
-        status = status_text.strip() or Status.PASSED.value
+        submitted = status_text.strip().lower() or Status.PASSED.value
+        # `skipped` is a word both vocabularies use, so a native status always
+        # wins and only a token this project does not define is translated.
+        translated = submitted not in _VALID_CHECK_STATUSES
+        status = _GH_CONCLUSION_ALIASES.get(submitted, submitted) if translated else submitted
         if status not in _VALID_CHECK_STATUSES:
             allowed = _COMMA_SEP.join(_VALID_CHECK_STATUSES)
             raise ToolError(
                 f"Unknown check status {status!r} for {name.strip()!r}; expected one of: {allowed}."
             )
-        record: dict[str, Any] = {_KEY_NAME: name.strip(), _KEY_STATUS: status}
-        reason_text = reason.strip()
+        record: dict[str, Any] = {_KEY_NAME: name.strip(), _KEY_STATUS: status, _KEY_REASON: ""}
+        reason_text = reason.strip() or (_implied_reason(submitted, status) if translated else "")
         if status != Status.PASSED.value:
             if not reason_text:
                 raise ToolError(
@@ -268,6 +284,18 @@ def _parse_checks(raw_checks: str) -> list[dict[str, Any]]:
             record[_KEY_REASON] = reason_text
         parsed.append(record)
     return parsed
+
+
+def _implied_reason(submitted: str, status: str) -> str:
+    """State why a non-pass is a non-pass, for a translated GitHub conclusion.
+
+    A native status must explain itself: `build=skipped` without a reason says
+    nothing about what was not run. A translated workflow conclusion carries its
+    own meaning, so the report can quote it.
+    """
+    if status != Status.PASSED.value:
+        return f"the workflow reported `{submitted}` for this job"
+    return ""
 
 
 def _publish_ready(checks: list[dict[str, Any]], records: list[dict[str, Any]]) -> bool:
