@@ -9,6 +9,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+import tomllib
+
 from tools._lib.ffi_platform import (
     cdylib_filename,
     isolated_ruby_env,
@@ -70,13 +72,13 @@ public class SmokeTest {
     }
 }
 """
-_C_ABI_SMOKE_SRC = """\
+_C_ABI_SMOKE_TEMPLATE = """\
 #include <stdio.h>
 #include "PolylibFFIInternal.h"
 
 int main(void) {
     uint32_t v = ffi_polylib_ffi_uniffi_contract_version();
-    if (v != 29) {
+    if (v != __CONTRACT_VERSION__) {
         fprintf(stderr, "Unexpected UniFFI contract version: %u\\n", v);
         return 1;
     }
@@ -200,6 +202,47 @@ def verify_ruby_compat(root: Path, *, require_toolchain: bool = False) -> list[C
     ]
 
 
+def _uniffi_contract_version(root: Path) -> int:
+    """Derive the UniFFI contract version from the pinned dependency.
+
+    UniFFI's contract version tracks the minor of its own release, so a
+    hardcoded `29` breaks the C-ABI smoke on upgrade with an error pointing at
+    a magic number instead of at the dependency that moved. Read it from the
+    workspace manifest, falling back to `Cargo.lock` when the manifest carries
+    only a caret range that resolves to a different minor.
+    """
+    manifest = root / "Cargo.toml"
+    data = tomllib.loads(manifest.read_text(encoding=_UTF8))
+    declared = data.get("workspace", {}).get("dependencies", {}).get("uniffi")
+    lock = root / "Cargo.lock"
+    if lock.is_file():
+        locked = tomllib.loads(lock.read_text(encoding=_UTF8))
+        for package in locked.get("package", ()):
+            if package.get("name") == "uniffi":
+                return _minor_of(str(package.get("version", "")))
+    if isinstance(declared, str):
+        return _minor_of(declared.lstrip("^~= "))
+    raise RuntimeError(
+        f"Could not derive the UniFFI contract version from {manifest} or {lock}; "
+        "the C-ABI smoke test needs one to compare against."
+    )
+
+
+def _minor_of(version: str) -> int:
+    """Return the minor component of a semver string."""
+    parts = version.split(".")
+    if len(parts) < 2 or not parts[1].isdigit():
+        raise RuntimeError(f"Cannot read a minor version from {version!r}.")
+    return int(parts[1])
+
+
+def _c_abi_smoke_source(root: Path) -> str:
+    """Render the C-ABI smoke with the derived contract version."""
+    return _C_ABI_SMOKE_TEMPLATE.replace(
+        "__CONTRACT_VERSION__", str(_uniffi_contract_version(root))
+    )
+
+
 def _swift_artifacts(swift_root: Path) -> CheckResult:
     """Check the generated Swift UniFFI files exist before anything runs."""
     inc_dir = swift_root / _SWIFT_SOURCES / _SWIFT_INTERNAL / _SWIFT_INCLUDE
@@ -232,7 +275,7 @@ def _verify_swift_c_abi_smoke(swift_root: Path) -> CheckResult:
         tmp_dir = Path(tmp_str)
         src = tmp_dir / "smoke.c"
         exe = tmp_dir / "smoke"
-        src.write_text(_C_ABI_SMOKE_SRC, encoding=_UTF8)
+        src.write_text(_c_abi_smoke_source(swift_root.parent.parent), encoding=_UTF8)
         cmd = [
             compiler,
             "-D_Nullable=",
