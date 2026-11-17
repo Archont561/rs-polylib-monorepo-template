@@ -11,6 +11,34 @@
 
 **Write core logic once in Rust—ship idiomatic libraries to crates.io, PyPI, npm, Kotlin, Swift, and Ruby.** Every target shares verified cross-language conformance and offline-ready Pixi environments.
 
+<!-- Status: live GitHub Actions results for the default branch. -->
+[![CI](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/ci.yml)
+[![Security](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/security.yml)
+[![Build](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/build.yml)
+[![Docs](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/pages.yml)
+[![Release Demo](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/release-demo.yml/badge.svg?branch=main)](https://github.com/Archont561/rs-polylib-monorepo-template/actions/workflows/release-demo.yml)
+
+<!-- Quality: coverage is recorded by the Codecov uploads in `ci.yml`. -->
+[![Codecov](https://img.shields.io/codecov/c/github/Archont561/rs-polylib-monorepo-template/main?label=coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/Archont561/rs-polylib-monorepo-template)
+[![Demo release](https://img.shields.io/github/v/release/Archont561/rs-polylib-monorepo-template?include_prereleases&filter=demo-*&label=demo%20release&logo=github&logoColor=white)](https://github.com/Archont561/rs-polylib-monorepo-template/releases)
+[![License](https://img.shields.io/github/license/Archont561/rs-polylib-monorepo-template?label=license)](https://github.com/Archont561/rs-polylib-monorepo-template/blob/main/LICENSE)
+[![Rust MSRV](https://img.shields.io/badge/MSRV-1.88-000000?logo=rust&logoColor=white)](Cargo.toml)
+[![Gherkin](https://img.shields.io/badge/conformance-Gherkin-23b14d?logo=cucumber&logoColor=white)](conformance/slug.feature)
+
+<!-- Stack: versions are the ones the CI matrices below actually prove. -->
+[![Rust](https://img.shields.io/badge/Rust-2024_edition-000000?logo=rust&logoColor=white)](Cargo.toml)
+[![Python](https://img.shields.io/badge/Python-3.10_%7C_3.11_%7C_3.12_%7C_3.13_%7C_3.14-3776AB?logo=python&logoColor=white)](packages/polylib-py/pyproject.toml)
+[![Node.js](https://img.shields.io/badge/Node.js-20_%7C_22_%7C_24-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Bun](https://img.shields.io/badge/Bun-1.1_%7C_1.4_%7C_latest-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
+[![JDK](https://img.shields.io/badge/JDK-17_%7C_21_%7C_25-ED8B00?logo=openjdk&logoColor=white)](packages/polylib-kt/README.md)
+[![Ruby](https://img.shields.io/badge/Ruby-3.2_%7C_3.3_%7C_3.4-CC342D?logo=ruby&logoColor=white)](packages/polylib-rb/README.md)
+[![Swift](https://img.shields.io/badge/Swift-macOS_%2B_Linux-F05138?logo=swift&logoColor=white)](packages/polylib-swift/README.md)
+[![PyO3](https://img.shields.io/badge/PyO3-abi3-3776AB?logo=python&logoColor=white)](crates/polylib-py/Cargo.toml)
+[![NAPI-RS](https://img.shields.io/badge/NAPI--RS-native-276DC3?logo=nodedotjs&logoColor=white)](crates/polylib-js/Cargo.toml)
+[![WebAssembly](https://img.shields.io/badge/WASM-wasm--bindgen-654FF0?logo=webassembly&logoColor=white)](crates/polylib-wasm/Cargo.toml)
+[![UniFFI](https://img.shields.io/badge/UniFFI-Kotlin_%7C_Swift_%7C_Ruby-FF6B35)](crates/polylib-ffi/Cargo.toml)
+[![Pixi](https://img.shields.io/badge/Pixi-offline_workspace-f7b32a?logo=pixi&logoColor=black)](pixi.toml)
+
 Version: `0.1.0` | Rust MSRV: `1.88` | License: [MIT](LICENSE)
 
 ## Architecture
