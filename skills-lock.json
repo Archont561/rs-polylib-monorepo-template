@@ -13,6 +13,12 @@
       "skillPath": "skills/clean-code-principles/SKILL.md",
       "computedHash": "49afca0e6566fccb9010587585b92c43e27b93b3f7b55ab0e7cb558e2862dc29"
     },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "7bc223e2aafbdbf6e50ea243ba6ef67fe432bb069ab439fea0390795dac0bf7f"
+    },
     "grill-me": {
       "source": "mattpocock/skills",
       "sourceType": "github",

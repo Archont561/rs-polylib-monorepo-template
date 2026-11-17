@@ -166,6 +166,7 @@ rules:
       - refactor
       - grill-me
       - grilling
+      - find-skills
     level: error
     message: "Required project and agent skill directories must exist under .agents/skills/."
 
