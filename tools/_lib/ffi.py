@@ -6,7 +6,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from tasknest import ToolError
 
@@ -17,15 +17,19 @@ from tools._lib.ffi_platform import (
 from tools._lib.ffi_platform import (
     require_tool as _require_tool,
 )
-from tools._lib.status import CheckResult, failed, passed, skipped
+from tools._lib.status import CheckResult, passed
+from tools._lib.toolchain import missing_toolchain
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from tasknest import ToolContext
 
-TARGET_ALL = "all"
-TARGET_KOTLIN = "kotlin"
-TARGET_SWIFT = "swift"
-TARGET_RUBY = "ruby"
+FfiBuildTarget = Literal["all", "kotlin", "swift", "ruby"]
+TARGET_ALL: FfiBuildTarget = "all"
+TARGET_KOTLIN: FfiBuildTarget = "kotlin"
+TARGET_SWIFT: FfiBuildTarget = "swift"
+TARGET_RUBY: FfiBuildTarget = "ruby"
 VALID_FFI_TARGETS: tuple[str, ...] = (TARGET_ALL, TARGET_KOTLIN, TARGET_SWIFT, TARGET_RUBY)
 
 _UTF8 = "utf-8"
@@ -63,7 +67,7 @@ _SWIFT_MODULEMAP = (
 )
 
 
-def resolve_ffi_targets(target: str) -> tuple[str, ...]:
+def resolve_ffi_targets(target: FfiBuildTarget) -> tuple[FfiBuildTarget, ...]:
     """Validate and expand an FFI target selector into concrete languages."""
     if target not in VALID_FFI_TARGETS:
         choices = _COMMA_SEP.join(VALID_FFI_TARGETS)
@@ -156,11 +160,11 @@ def _stage_ruby(ctx: ToolContext, cdylib: Path) -> None:
     print(f"Staged Ruby UniFFI bindings in {rb_root.relative_to(ctx.repo_root)}")
 
 
-def build_ffi_targets(ctx: ToolContext, target: str = TARGET_ALL) -> None:
+def build_ffi_targets(ctx: ToolContext, target: FfiBuildTarget = TARGET_ALL) -> None:
     """Compile `polylib-ffi` cdylib and generate requested UniFFI bindings."""
     targets = resolve_ffi_targets(target)
     cdylib = build_cdylib(ctx)
-    stagers = {
+    stagers: dict[FfiBuildTarget, Callable[[ToolContext, Path], None]] = {
         TARGET_KOTLIN: _stage_kotlin,
         TARGET_SWIFT: _stage_swift,
         TARGET_RUBY: _stage_ruby,
@@ -211,13 +215,12 @@ def test_swift(ctx: ToolContext, *, require_toolchain: bool = False) -> CheckRes
     """Verify generated SwiftPM artifacts and execute `swift test` when Swift is installed."""
     swift_root = ctx.repo_root / _PACKAGES_DIR / _SWIFT_DIR
     _verify_swift_artifacts(swift_root)
-    if shutil.which(TARGET_SWIFT) is None:
-        reason = (
-            "`swift` not found on PATH, so `swift test` did not run; install the Swift "
-            "toolchain or run on macOS CI."
-        )
-        if require_toolchain:
-            return failed("swift-test", reason)
-        return skipped("swift-test", reason)
+    if absence := missing_toolchain(
+        "swift-test",
+        TARGET_SWIFT,
+        hint="install the Swift toolchain or run on macOS CI",
+        required=require_toolchain,
+    ):
+        return absence.as_result()
     ctx.run([TARGET_SWIFT, _TEST_CMD], cwd=swift_root)
     return passed("swift-test", evidence="swift test passed")

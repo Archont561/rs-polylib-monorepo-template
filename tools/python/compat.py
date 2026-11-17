@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-from tasknest import ToolContext, ToolError, tool
+from typing import TYPE_CHECKING
+
+from tasknest import ToolContext, tool
 
 from tools._lib.compat_py import verify_py_compat
-from tools._lib.status import publish_ready, render
+from tools._lib.verification import reports_verification
+
+if TYPE_CHECKING:
+    from tools._lib.status import CheckResult
 
 
 @tool(
     marks=("ci", "python", "rust", "compat"),
     description="Build polylib wheel/sdist with maturin and verify metadata + venv smoke.",
 )
-def py_compat(ctx: ToolContext) -> None:
+@reports_verification("Python compatibility")
+def py_compat(ctx: ToolContext) -> list[CheckResult]:
     """Verify `packages/polylib-py` wheel/sdist build, metadata, and clean virtualenv import."""
-    results = verify_py_compat(ctx.repo_root)
-    print(render(results))
-    if not publish_ready(results):
-        raise ToolError("Python compatibility did not fully pass; see the lanes above.")
+    return verify_py_compat(ctx.repo_root)

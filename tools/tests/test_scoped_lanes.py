@@ -3,6 +3,10 @@
 `--target kotlin` asks for Kotlin. Reporting Swift as `skipped` because it was
 not asked for makes every scoped run fail its own readiness gate, which is a
 false failure of exactly the kind this work set out to remove.
+
+The gate now lives in the `reports_verification` decorator, so these tests
+assert on observable behaviour — does the task raise, and what was printed —
+rather than on a helper the decorator owns.
 """
 
 from __future__ import annotations
@@ -10,16 +14,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from tools._lib.status import Status, publish_ready
+import pytest
+from tasknest import ToolError
 
-# `@tool` returns a TaskDefinition; the plain callable is `.callable_fn`.
+from tools._lib.status import Status
 from tools.ffi.test import test_ffi as _test_ffi_task
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from pathlib import Path
-
-    import pytest
 
 _test_ffi = _test_ffi_task.callable_fn
 
@@ -35,34 +37,54 @@ class _Ctx:
         self.commands.append(list(argv))
 
 
-def test_unselected_lanes_are_not_reported_as_skipped(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_a_scoped_run_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Only the selected lane appears in the results."""
+    """A single selected lane that ran is a complete run, so the gate must pass."""
     monkeypatch.setattr("tools.ffi.test.test_kotlin_with_coverage", lambda *_a, **_k: None)
-    seen: list[str] = []
-
-    def _record(results: Sequence[object]) -> bool:
-        seen.extend(item.name for item in results)  # type: ignore[attr-defined]
-        return True
-
-    monkeypatch.setattr("tools.ffi.test.publish_ready", _record)
     _test_ffi(_Ctx(tmp_path), target="kotlin", coverage=True)
-    assert seen == ["kotlin-test"]
-    assert "swift-test" not in seen
+    printed = capsys.readouterr().out
+    assert "Verification: passed=1" in printed
+    assert "skipped" not in printed
 
 
-def test_a_scoped_run_reaches_publish_ready(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_only_the_selected_lane_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A single selected lane that ran is a complete run."""
+    """An unselected lane is absent from the results, not a skip."""
     monkeypatch.setattr("tools.ffi.test.test_kotlin_with_coverage", lambda *_a, **_k: None)
-    captured: list[Status] = []
-
-    def _record(results: Sequence[object]) -> bool:
-        captured.extend(item.status for item in results)  # type: ignore[attr-defined]
-        return bool(publish_ready(results))  # type: ignore[arg-type]
-
-    monkeypatch.setattr("tools.ffi.test.publish_ready", _record)
     _test_ffi(_Ctx(tmp_path), target="kotlin", coverage=True)
-    assert captured == [Status.PASSED]
+    printed = capsys.readouterr().out
+    assert "swift-test" not in printed
+    assert "passed=1" in printed
+
+
+def test_a_failing_lane_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The gate is real: a non-passing result must fail the task."""
+    from tools._lib.status import failed
+
+    monkeypatch.setattr(
+        "tools.ffi.test.test_kotlin_with_coverage",
+        lambda *_a, **_k: (_ for _ in ()).throw(ToolError("kotlin broke")),
+    )
+    with pytest.raises(ToolError):
+        _test_ffi(_Ctx(tmp_path), target="kotlin", coverage=True)
+    del failed
+
+
+def test_a_selected_lane_that_skipped_blocks_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A skip is not a pass: selecting every lane and skipping one must fail.
+
+    This is the counterpart to the scoped-run test. Kotlin and Ruby run, Swift's
+    toolchain is absent, so the run reports one skip and refuses to pass — which
+    is what makes an absent toolchain visible instead of silently green.
+    """
+    monkeypatch.setattr("tools.ffi.test.test_kotlin_with_coverage", lambda *_a, **_k: None)
+    monkeypatch.setattr("tools.ffi.test.test_ruby_with_coverage", lambda *_a, **_k: None)
+    with pytest.raises(ToolError, match="FFI tests did not fully pass"):
+        _test_ffi(_Ctx(tmp_path), target="all", coverage=True)
+    printed = capsys.readouterr().out
+    assert "Verification: passed=2, skipped=1" in printed
+    assert Status.SKIPPED.value in printed

@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Literal
 
 import tomllib
 
@@ -19,18 +20,22 @@ from tools._lib.ffi_platform import (
 )
 from tools._lib.status import (
     CheckResult,
-    failed,
     passed,
     publish_ready,
     render,
     skipped,
 )
 from tools._lib.stdlib_proc import run_checked
+from tools._lib.toolchain import missing_toolchain
 
-TARGET_ALL = "all"
-TARGET_KOTLIN = "kotlin"
-TARGET_SWIFT = "swift"
-TARGET_RUBY = "ruby"
+# The Literal is what tasknest reads to build `choices` for `--help`, the CLI,
+# and the generated skill; the tuple is what internal code iterates. Both are
+# declared here so the member names have one home.
+FfiTarget = Literal["all", "kotlin", "swift", "ruby"]
+TARGET_ALL: FfiTarget = "all"
+TARGET_KOTLIN: FfiTarget = "kotlin"
+TARGET_SWIFT: FfiTarget = "swift"
+TARGET_RUBY: FfiTarget = "ruby"
 VALID_TARGETS: tuple[str, ...] = (TARGET_ALL, TARGET_KOTLIN, TARGET_SWIFT, TARGET_RUBY)
 
 _UTF8 = "utf-8"
@@ -98,13 +103,14 @@ def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> CheckResult:
             f"{cp_file.relative_to(kt_root)} is missing; the gradle `writeRuntimeClasspath` "
             "task did not run, so the standalone JVM consumer cannot be exercised.",
         )
-    absent = [binary for binary in ("javac", "java") if shutil.which(binary) is None]
-    if absent:
-        return skipped(
-            name,
-            f"{_COMMA_SEP.join(absent)} not found on PATH; run via `pixi run -e kt ...` "
-            "or install a JDK to exercise the standalone JVM consumer.",
-        )
+    if absence := missing_toolchain(
+        name,
+        ("javac", "java"),
+        hint=(
+            "run via `pixi run -e kt ...` or install a JDK to exercise the standalone JVM consumer"
+        ),
+    ):
+        return absence.as_result()
     runtime_cp = cp_file.read_text(encoding=_UTF8).strip()
     classpath = os.pathsep.join(part for part in (str(jar_path), runtime_cp) if part)
     with tempfile.TemporaryDirectory(prefix="polylib-kt-smoke-") as tmp_str:
@@ -119,13 +125,13 @@ def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> CheckResult:
 
 def verify_kotlin_compat(root: Path, *, require_toolchain: bool = False) -> list[CheckResult]:
     """Build the Kotlin JAR, verify its payload, and smoke the standalone JVM consumer."""
-    if shutil.which(_GRADLE_BIN) is None:
-        reason = (
-            f"`{_GRADLE_BIN}` not found on PATH; run via `pixi run -e kt ...` to build the JAR."
-        )
-        if require_toolchain:
-            return [failed("kotlin", reason)]
-        return [skipped("kotlin", reason)]
+    if absence := missing_toolchain(
+        "kotlin",
+        _GRADLE_BIN,
+        hint="run via `pixi run -e kt ...` to build the JAR",
+        required=require_toolchain,
+    ):
+        return [absence.as_result()]
     kt_root = root / _PACKAGES_DIR / "polylib-kt"
     run_checked(
         [
@@ -166,11 +172,13 @@ def _ruby_bundle_env(rb_root: Path) -> dict[str, str]:
 
 def verify_ruby_compat(root: Path, *, require_toolchain: bool = False) -> list[CheckResult]:
     """Build the `.gem`, install it isolated, and smoke the packaged native library."""
-    if shutil.which(_GEM_BIN) is None:
-        reason = f"`{_GEM_BIN}` not found on PATH; run via `pixi run -e rb ...` to build the gem."
-        if require_toolchain:
-            return [failed("ruby", reason)]
-        return [skipped("ruby", reason)]
+    if absence := missing_toolchain(
+        "ruby",
+        _GEM_BIN,
+        hint="run via `pixi run -e rb ...` to build the gem",
+        required=require_toolchain,
+    ):
+        return [absence.as_result()]
     rb_root = root / _PACKAGES_DIR / "polylib-rb"
     env = _ruby_bundle_env(rb_root)
     with tempfile.TemporaryDirectory(prefix="polylib-rb-compat-") as tmp_str:
@@ -262,6 +270,8 @@ def _swift_artifacts(swift_root: Path) -> CheckResult:
 def _verify_swift_c_abi_smoke(swift_root: Path) -> CheckResult:
     """Link and run the C-ABI smoke binary, or say which compiler is missing."""
     name = "swift-c-abi"
+    # This lane needs any one of the three, so `missing_toolchain` (which wants all
+    # of them present) is the wrong fit; the reason still names the binary to add.
     compiler = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if compiler is None:
         return skipped(
@@ -297,15 +307,13 @@ def verify_swift_compat(root: Path, *, require_toolchain: bool = False) -> list[
     """Verify SwiftPM artifacts, the C-ABI link smoke, and `swift test` where Swift exists."""
     swift_root = root / _PACKAGES_DIR / "polylib-swift"
     results = [_swift_artifacts(swift_root)]
-    if shutil.which(TARGET_SWIFT) is None:
-        reason = (
-            "`swift` not found on PATH, so `swift build`/`swift test` did not run; "
-            "install the Swift toolchain or run on macOS CI."
-        )
-        if require_toolchain:
-            results.append(failed("swift-test", reason))
-        else:
-            results.append(skipped("swift-test", reason))
+    if absence := missing_toolchain(
+        "swift-test",
+        TARGET_SWIFT,
+        hint="install the Swift toolchain or run on macOS CI",
+        required=require_toolchain,
+    ):
+        results.append(absence.as_result())
         results.append(_verify_swift_c_abi_smoke(swift_root))
         return results
     run_checked([TARGET_SWIFT, _BUILD_CMD], swift_root)
@@ -316,7 +324,7 @@ def verify_swift_compat(root: Path, *, require_toolchain: bool = False) -> list[
 
 
 def verify_ffi_compat(
-    root: Path, target: str = TARGET_ALL, *, require_toolchain: bool = False
+    root: Path, target: FfiTarget = TARGET_ALL, *, require_toolchain: bool = False
 ) -> list[CheckResult]:
     """Run UniFFI compatibility verification for one or all FFI targets."""
     if target not in VALID_TARGETS:

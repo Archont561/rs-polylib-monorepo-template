@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from tools._lib.compat_ts_node import verify_node_consumers
 from tools._lib.program import resolve_program
@@ -32,7 +33,9 @@ _WASM_PKG = "@polylib/polylib-wasm"
 _JS_PKG = "@polylib/polylib-js"
 _FACADE_PKG = "@polylib/polylib"
 
-MODE_ALL = "all"
+TsCompatMode = Literal["all", "pack", "bun", "node", "types"]
+
+MODE_ALL: TsCompatMode = "all"
 MODE_PACK = "pack"
 MODE_BUN = "bun"
 MODE_NODE = "node"
@@ -328,7 +331,7 @@ def _verify_bun_and_types(
         _check_consumer_runtime_and_types(root, consumer_dir, run_bun=run_bun, run_types=run_types)
 
 
-def verify_ts_compat(root: Path, mode: str = MODE_ALL) -> list[CheckResult]:
+def verify_ts_compat(root: Path, mode: TsCompatMode = MODE_ALL) -> list[CheckResult]:
     """Pack and verify npm tarballs (`all`, `pack`, `bun`, `node`, or `types`)."""
     if mode not in VALID_MODES:
         expected = ", ".join(VALID_MODES)

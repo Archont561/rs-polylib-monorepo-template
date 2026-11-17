@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tasknest import ToolContext, tool
 
-from tools._lib.release_pack import pack_release_artifacts
+from tools._lib.release_pack import PackTarget, pack_release_artifacts
 
 
 @tool(
@@ -15,7 +15,7 @@ from tools._lib.release_pack import pack_release_artifacts
 )
 def pack_artifacts(
     ctx: ToolContext,
-    target: str = "all",
+    target: PackTarget = "all",
     output_dir: str = "dist-release",
 ) -> None:
     """Stage distributable release packages into `output_dir`."""
