@@ -27,7 +27,7 @@ pre-commit:
             run: pixi run tools skill --check
 
     - name: docs-sync
-      glob: "{templates/**,README.md,AGENTS.md,.github/ISSUE_TEMPLATE/**,.github/PULL_REQUEST_TEMPLATE.md,Cargo.toml,packages/*/pyproject.toml,packages/*/package.json,packages/*/build.gradle.kts,packages/*/Package.swift,packages/*/polylib.gemspec,apps/*/package.json}"
+      glob: "{templates/**,README.md,AGENTS.md,.github/ISSUE_TEMPLATE/**,.github/PULL_REQUEST_TEMPLATE.md,Cargo.toml,packages/*/pyproject.toml,packages/*/package.json,packages/*/build.gradle.kts,packages/*/Package.swift,packages/*/polylib.gemspec,docs/package.json}"
       run: pixi run tools run docs check
 
     - name: pixi-sandbox-plan
@@ -55,7 +55,7 @@ pre-commit:
       run: pixi run -e docs tools run docs links
 
     - name: lint-prose
-      glob: "{README.md,AGENTS.md,apps/docs/content/docs/index.mdx}"
+      glob: "{README.md,AGENTS.md,docs/content/docs/index.mdx}"
       run: pixi run -e docs tools run docs prose
 
     - name: lint-actions

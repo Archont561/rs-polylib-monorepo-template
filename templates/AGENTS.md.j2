@@ -27,7 +27,7 @@ Read this file before editing code, manifests, or workflows.
 - **Python packages:** {% for p in python_packages %}`packages/{{ p }}-py`{% if not loop.last %}, {% endif %}{% endfor %}
 - **TypeScript packages:** {% for p in ts_packages %}`{{ p }}`{% if not loop.last %}, {% endif %}{% endfor %}
 - **UniFFI packages:** {% for p in ffi_packages %}`packages/{{ p }}`{% if not loop.last %}, {% endif %}{% endfor %}
-- **Docs apps:** {% for a in docs_apps %}`apps/{{ a }}`{% if not loop.last %}, {% endif %}{% endfor %}
+- **Docs apps:** {% for a in docs_apps %}`{{ a }}/`{% if not loop.last %}, {% endif %}{% endfor %}
 
 ## Verification commands
 

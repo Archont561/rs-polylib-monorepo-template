@@ -10,9 +10,9 @@ cache-dir = ".rumdl_cache"
 exclude = [
   ".agents/skills/**",
   ".pixi/**",
-  "apps/docs/.next/**",
-  "apps/docs/.source/**",
-  "apps/docs/out/**",
+  "docs/.next/**",
+  "docs/.source/**",
+  "docs/out/**",
   "backlog/tasks/**",
   "coverage/**",
   "dist/**",
@@ -30,7 +30,7 @@ disable = [
 ]
 
 [per-file-flavor]
-"apps/docs/content/**/*.mdx" = "mdx"
+"docs/content/**/*.mdx" = "mdx"
 
 [MD004]
 style = "dash"

@@ -11,5 +11,5 @@ def lint_links(ctx: ToolContext, online: bool = False) -> None:
     argv = ["lychee", "--config", "lychee.toml"]
     if not online:
         argv.append("--offline")
-    argv.extend(["README.md", "AGENTS.md", "crates", "packages", "apps/docs"])
+    argv.extend(["README.md", "AGENTS.md", "crates", "packages", "docs"])
     ctx.run(argv, cwd=ctx.repo_root)

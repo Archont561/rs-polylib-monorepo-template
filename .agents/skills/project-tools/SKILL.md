@@ -29,14 +29,14 @@ Audit `coverage/&lt;lang&gt;/` reports against the per-language 90% line thresho
 - Options: --lang &lt;str&gt;, --min-coverage &lt;float&gt;, --require-all &lt;bool&gt;
 
 ### `pixi run tools run docs build` (`docs.build`)
-Run package.json script &#39;build&#39; in apps/docs.
+Run package.json script &#39;build&#39; in docs.
 
 ### `pixi run tools run docs check` (`docs.check`)
 Check README.md, AGENTS.md, and .github templates against templates/.
 - Marks: fast, ci, docs
 
 ### `pixi run tools run docs dev` (`docs.dev`)
-Run package.json script &#39;dev&#39; in apps/docs.
+Run package.json script &#39;dev&#39; in docs.
 - Persistent: true
 
 ### `pixi run tools run docs export` (`docs.export`)

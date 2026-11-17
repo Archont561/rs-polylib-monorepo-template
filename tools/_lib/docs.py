@@ -124,7 +124,7 @@ def _build_issue_areas(
         *(f"Python package ({name})" for name in py_pkgs),
         *(f"TypeScript package ({name})" for name in ts_pkgs),
         *(f"UniFFI package (packages/{name})" for name in ffi_pkgs),
-        *(f"Docs app (apps/{name})" for name in docs_apps),
+        *(f"Docs app ({name}/)" for name in docs_apps),
         "Tooling / CI / Pixi / Policy",
     )
 
@@ -135,7 +135,8 @@ def collect_facts(root: Path) -> WorkspaceFacts:
     rust_crates, publishable = _discover_rust_crates(root)
     py_pkgs, ts_pkgs = _discover_packages(root)
     ffi_pkgs = _discover_ffi_packages(root)
-    docs_apps = tuple(p.parent.name for p in sorted((root / "apps").glob("*/package.json")))
+    docs_app = root / "docs"
+    docs_apps = (docs_app.name,) if (docs_app / "package.json").is_file() else ()
     return WorkspaceFacts(
         version=str(ws_pkg.get("version", "0.1.0")),
         msrv=str(ws_pkg.get("rust-version", "1.88")),

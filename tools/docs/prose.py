@@ -10,7 +10,7 @@ from pathlib import Path
 
 from tasknest import ToolContext, tool
 
-_CONTENT_DIR = Path("apps/docs/content/docs")
+_CONTENT_DIR = Path("docs/content/docs")
 
 
 def _vale_targets(ctx: ToolContext) -> list[str]:

@@ -18,7 +18,7 @@ persistent_scripts = ["dev"]
 exclude_scripts = ["prepack"]
 
 [[discovery.manifests]]
-path = "apps/docs"
+path = "docs"
 persistent_scripts = ["dev"]
 exclude_scripts = ["postinstall"]
 

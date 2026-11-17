@@ -46,7 +46,7 @@ body:
 
         - "UniFFI package (packages/polylib-swift)"
 
-        - "Docs app (apps/docs)"
+        - "Docs app (docs/)"
 
         - "Tooling / CI / Pixi / Policy"
 

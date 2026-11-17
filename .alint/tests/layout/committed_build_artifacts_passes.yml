@@ -21,7 +21,7 @@ given:
         kind: dir_absent
         paths:
           - "**/dist"
-          - apps/docs/out
+          - docs/out
         level: error
 
 when: [check]

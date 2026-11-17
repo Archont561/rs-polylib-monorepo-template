@@ -16,10 +16,10 @@
       "!.github/workflows/publish-sandbox.yml",
       "!.github/workflows/relock.yml",
       "!scripts/restore.sh",
-      "!apps/docs/.next",
-      "!apps/docs/.source",
-      "!apps/docs/out",
-      "!apps/docs/next-env.d.ts",
+      "!docs/.next",
+      "!docs/.source",
+      "!docs/out",
+      "!docs/next-env.d.ts",
       "!packages/polylib-js/src/native",
       "!packages/polylib-js/dist",
       "!packages/polylib-wasm/src/wasm",
@@ -146,7 +146,7 @@
       }
     },
     {
-      "includes": ["apps/docs/src/**"],
+      "includes": ["docs/src/**"],
       "linter": {
         "rules": {
           "style": {
@@ -156,11 +156,11 @@
                 "patterns": [
                   {
                     "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
-                    "message": "Use @/ or ./ imports inside apps/docs/src."
+                    "message": "Use @/ or ./ imports inside docs/src."
                   },
                   {
                     "group": ["@polylib/app-*"],
-                    "message": "apps/docs must stay isolated from other apps."
+                    "message": "docs must stay isolated from other apps."
                   }
                 ]
               }

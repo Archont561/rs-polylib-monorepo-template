@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "apps/docs/**"
+      - "docs/**"
       - "tools/**"
       - "README.md"
       - "templates/**"
@@ -58,7 +58,7 @@ jobs:
           pixi run -e docs tools run docs links
           pixi run -e docs tools run docs prose
 
-      - name: Build static Fumadocs export (apps/docs/out)
+      - name: Build static Fumadocs export (docs/out)
         run: pixi run -e docs tools run docs build
 
       # The lint steps above check the MDX as text, so a site that compiles the MDX but
@@ -108,7 +108,7 @@ jobs:
           if [ "$http_code" = "200" ]; then
             build_type="$(jq -r '.build_type // ""' "$body_file")"
             if [ "$build_type" = "workflow" ]; then
-              write_status "true" "GitHub Pages is enabled (source: GitHub Actions). Deploying \`apps/docs/out\`."
+              write_status "true" "GitHub Pages is enabled (source: GitHub Actions). Deploying \`docs/out\`."
             else
               write_status "false" "Skipped deployment: GitHub Pages \`build_type\` is \`${build_type:-unknown}\` (expected \`workflow\`). Set **Settings -> Pages -> Source: GitHub Actions** to enable automatic deploys."
             fi
@@ -127,7 +127,7 @@ jobs:
         if: ${{ steps.pages-status.outputs.enabled == 'true' }}
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: apps/docs/out
+          path: docs/out
 
   deploy:
     name: Deploy to GitHub Pages

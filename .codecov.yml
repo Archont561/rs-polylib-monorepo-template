@@ -85,6 +85,6 @@ ignore:
   - "packages/polylib-rb/lib/polylib/generated/**"
   - "packages/polylib-swift/Sources/PolylibFFI/**"
   - "packages/polylib-swift/Sources/PolylibFFIInternal/**"
-  - "apps/docs/**"
+  - "docs/**"
   - "backlog/**"
   - "tools/**"
