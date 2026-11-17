@@ -10,7 +10,7 @@ import struct
 
 import pytest
 
-from tools._lib.binary_arch import extension_container, read_payload_arch, tag_wants
+from tools._lib.binary_arch import extension_containers, read_payload_arch, tag_wants
 
 _ELF_64_LITTLE = 2
 _ELF_64_BIG = 2
@@ -91,13 +91,24 @@ def test_truncated_elf_is_unknown() -> None:
     assert not result.is_known
 
 
+def test_dot_so_may_be_elf_or_macho() -> None:
+    """`.so` is ELF on Linux and Mach-O on macOS, so it cannot name one container."""
+    assert extension_containers(".so") == frozenset({"elf", "macho"})
+
+
 @pytest.mark.parametrize(
-    ("suffix", "container"),
-    [(".so", "elf"), (".pyd", "pe"), (".dylib", "macho"), (".dll", "pe"), (".bin", None)],
+    ("suffix", "containers"),
+    [
+        (".pyd", {"pe"}),
+        (".dylib", {"macho"}),
+        (".dll", {"pe"}),
+        (".bin", None),
+    ],
 )
-def test_extension_container_mapping(suffix: str, container: str | None) -> None:
-    """Extensions imply a container, and an unknown extension implies nothing."""
-    assert extension_container(suffix) == container
+def test_extension_container_mapping(suffix: str, containers: set[str] | None) -> None:
+    """Extensions imply the containers they may hold, and an unknown one implies none."""
+    expected: frozenset[str] | None = frozenset(containers) if containers else None
+    assert extension_containers(suffix) == expected
 
 
 @pytest.mark.parametrize(
@@ -108,6 +119,7 @@ def test_extension_container_mapping(suffix: str, container: str | None) -> None
         ("manylinux_2_28_x86_64", ("elf", "x86_64")),
         ("manylinux_2_28_aarch64", ("elf", "aarch64")),
         ("macosx_11_0_arm64", ("macho", "aarch64")),
+        ("macosx_11_0_universal2", ("macho", "universal")),
         ("macosx_10_9_x86_64", ("macho", "x86_64")),
         ("musllinux_1_2_x86_64", ("elf", "x86_64")),
     ],
@@ -120,3 +132,41 @@ def test_tag_wants(tag: str, expected: tuple[str, str]) -> None:
 def test_unknown_tag_is_undecidable() -> None:
     """An unrecognised tag yields nothing rather than a wrong guess."""
     assert tag_wants("some_new_platform") is None
+
+
+def _rel_elf() -> bytes:
+    return _elf(62)
+
+
+def test_macho_payload_is_rejected_under_a_linux_tag() -> None:
+    """A macOS `.so` inside a manylinux wheel cannot be imported there."""
+    from pathlib import Path
+
+    from tools._lib.compat_py import _verify_payload_arch
+
+    wheel = Path("polylib-1.0.0-cp310-cp310-manylinux_2_28_x86_64.whl")
+    result = _verify_payload_arch(wheel, "polylib/_native.so", _macho(0x01000007))[0]
+    assert result.status.value == "failed"
+    assert "Mach-O" in (result.reason or "")
+
+
+def test_macho_payload_is_accepted_under_a_macos_tag() -> None:
+    """On macOS the same suffix legitimately holds Mach-O."""
+    from pathlib import Path
+
+    from tools._lib.compat_py import _verify_payload_arch
+
+    wheel = Path("polylib-1.0.0-cp310-cp310-macosx_11_0_arm64.whl")
+    result = _verify_payload_arch(wheel, "polylib/_native.so", _macho(0x0100000C))[0]
+    assert result.status.value == "passed"
+
+
+def test_arm64_payload_is_rejected_under_an_intel_macos_tag() -> None:
+    """The universal2 case: a single-arch payload under a fat tag is still checked."""
+    from pathlib import Path
+
+    from tools._lib.compat_py import _verify_payload_arch
+
+    wheel = Path("polylib-1.0.0-cp310-cp310-macosx_10_9_x86_64.whl")
+    result = _verify_payload_arch(wheel, "polylib/_native.so", _macho(0x0100000C))[0]
+    assert result.status.value == "failed"

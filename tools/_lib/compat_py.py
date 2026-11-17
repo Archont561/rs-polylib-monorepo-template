@@ -11,7 +11,12 @@ from pathlib import Path
 import tomllib
 from tasknest import ToolError
 
-from tools._lib.binary_arch import extension_container, read_payload_arch, tag_wants
+from tools._lib.binary_arch import (
+    _UNIMPORTABLE_WHEEL_SUFFIXES,
+    extension_containers,
+    read_payload_arch,
+    tag_wants,
+)
 from tools._lib.process import run_checked
 from tools._lib.status import CheckResult, failed, passed, skipped
 
@@ -85,8 +90,16 @@ def _verify_payload_arch(wheel_path: Path, member: str, payload: bytes) -> list[
             )
         ]
     suffix = Path(member).suffix
-    expected_container = extension_container(suffix)
-    if expected_container is None:
+    if suffix.lower() in _UNIMPORTABLE_WHEEL_SUFFIXES:
+        return [
+            failed(
+                "wheel-payload-arch",
+                f"{member} is a {suffix} file, which Python cannot import; a wheel's "
+                "native member must be an extension module (.so or .pyd).",
+            )
+        ]
+    expected_containers = extension_containers(suffix)
+    if expected_containers is None:
         return [
             failed(
                 "wheel-payload-arch",
@@ -105,13 +118,20 @@ def _verify_payload_arch(wheel_path: Path, member: str, payload: bytes) -> list[
             )
         ]
     wanted_container, wanted_arch = wanted
-    if expected_container != wanted_container:
+    if observed.container not in expected_containers:
         return [
             failed(
                 "wheel-payload-arch",
-                f"{wheel_path.name} is tagged {tag} but carries a {suffix} extension, "
-                f"which holds a {expected_container} container; the payload cannot run "
-                "on the platform the filename advertises.",
+                f"{wheel_path.name} is tagged {tag} but carries {observed.detail}, which is "
+                f"not what a {suffix} holds on that platform.",
+            )
+        ]
+    if observed.container != wanted_container:
+        return [
+            failed(
+                "wheel-payload-arch",
+                f"{wheel_path.name} is tagged {tag}, which needs a {wanted_container} payload, "
+                f"but the extension is {observed.detail}.",
             )
         ]
     if observed.arch != wanted_arch:

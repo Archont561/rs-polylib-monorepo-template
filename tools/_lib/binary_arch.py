@@ -120,17 +120,22 @@ def read_file_payload_arch(path: Path) -> PayloadArch:
         return read_payload_arch(handle.read(4096))
 
 
-_EXTENSION_CONTAINER: dict[str, str] = {
-    ".so": "elf",
-    ".pyd": "pe",
-    ".dylib": "macho",
-    ".dll": "pe",
+# A suffix does not identify a container on its own: `.so` is ELF on Linux and
+# Mach-O on macOS, which is exactly the distinction this module exists to make.
+# Each suffix maps to every container it is allowed to hold.
+_EXTENSION_CONTAINERS: dict[str, frozenset[str]] = {
+    ".so": frozenset({"elf", "macho"}),
+    ".pyd": frozenset({"pe"}),
+    ".dylib": frozenset({"macho"}),
+    ".dll": frozenset({"pe"}),
 }
+# A wheel's extension module must be importable, which rules out a bare dylib.
+_UNIMPORTABLE_WHEEL_SUFFIXES: frozenset[str] = frozenset({".dylib", ".dll"})
 
 
-def extension_container(suffix: str) -> str | None:
-    """Map an extension to the container it must hold, if the mapping is known."""
-    return _EXTENSION_CONTAINER.get(suffix.lower())
+def extension_containers(suffix: str) -> frozenset[str] | None:
+    """Map an extension to the containers it may hold, if the extension is known."""
+    return _EXTENSION_CONTAINERS.get(suffix.lower())
 
 
 def tag_wants(platform_tag: str) -> tuple[str, str] | None:
@@ -139,6 +144,8 @@ def tag_wants(platform_tag: str) -> tuple[str, str] | None:
     if tag.startswith("win"):
         return ("pe", "x86_64" if "amd64" in tag or "win_amd64" in tag else "aarch64")
     if tag.startswith("macosx"):
+        if "universal2" in tag:
+            return ("macho", "universal")
         return ("macho", "aarch64" if "arm64" in tag else "x86_64")
     if "linux" in tag:
         return ("elf", "aarch64" if "aarch64" in tag else "x86_64")
