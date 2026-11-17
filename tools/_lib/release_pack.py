@@ -7,7 +7,7 @@ import json
 import shutil
 import tarfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from tasknest import ToolError
 
@@ -22,7 +22,9 @@ _KEY_NAME = "name"
 _KEY_PACKAGE = "package"
 _DIR_BUILD = "build"
 _PACKAGES_DIR = "packages"
-_TARGET_ALL = "all"
+PackTarget = Literal["all", "rust", "npm", "kotlin", "ruby", "swift"]
+
+_TARGET_ALL: PackTarget = "all"
 _TARGET_RUST = "rust"
 _TARGET_NPM = "npm"
 _TARGET_KOTLIN = "kotlin"
@@ -105,7 +107,11 @@ def _pack_swift(ctx: ToolContext, out_dir: Path) -> None:
             tar.add(path, arcname=f"polylib-swift/{rel.as_posix()}", recursive=False)
 
 
-def pack_release_artifacts(ctx: ToolContext, output_dir: Path, target: str = _TARGET_ALL) -> None:
+def pack_release_artifacts(
+    ctx: ToolContext,
+    output_dir: Path,
+    target: PackTarget = _TARGET_ALL,
+) -> None:
     """Pack release artifacts for one or all ecosystems into `output_dir`."""
     if target not in VALID_PACK_TARGETS:
         choices = ", ".join(VALID_PACK_TARGETS)

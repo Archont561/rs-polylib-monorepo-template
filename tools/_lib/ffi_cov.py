@@ -24,7 +24,8 @@ from tools._lib.coverage import (
     parse_lcov,
 )
 from tools._lib.ffi_platform import require_tool as _require_tool
-from tools._lib.status import CheckResult, failed, passed, skipped
+from tools._lib.status import CheckResult, passed
+from tools._lib.toolchain import missing_toolchain
 
 if TYPE_CHECKING:
     from tasknest import ToolContext
@@ -153,14 +154,13 @@ def test_swift_with_coverage(
 ) -> CheckResult:
     """Run SwiftPM tests with `--enable-code-coverage` and write `coverage/swift/lcov.info`."""
     swift_root = ctx.repo_root / _PACKAGES_DIR / "polylib-swift"
-    if shutil.which(_SWIFT_BIN) is None:
-        reason = (
-            "`swift` not found on PATH, so the Swift coverage report was not produced; "
-            "install the Swift toolchain or run on macOS CI."
-        )
-        if require_toolchain:
-            return failed("swift-coverage", reason)
-        return skipped("swift-coverage", reason)
+    if absence := missing_toolchain(
+        "swift-coverage",
+        _SWIFT_BIN,
+        hint="install the Swift toolchain or run on macOS CI",
+        required=require_toolchain,
+    ):
+        return absence.as_result()
     ctx.run([_SWIFT_BIN, _TEST_CMD, "--enable-code-coverage"], cwd=swift_root)
     out_dir = coverage_dir(ctx.repo_root, _SWIFT_BIN)
     report_path = out_dir / LCOV_FILENAME

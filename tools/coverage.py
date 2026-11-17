@@ -16,10 +16,9 @@ from tools._lib.status import (
     CheckResult,
     failed,
     passed,
-    publish_ready,
-    render,
     skipped,
 )
+from tools._lib.verification import reports_verification
 
 _ALL = "all"
 _VALID_LANGS: tuple[str, ...] = (_ALL, *COVERAGE_REPORT_PATHS)
@@ -38,13 +37,14 @@ def _select_langs(lang: str) -> tuple[str, ...]:
     marks=("ci",),
     description="Audit `coverage/<lang>/` reports against the per-language 90% line threshold.",
 )
+@reports_verification("Coverage")
 def check_coverage(
     ctx: ToolContext,
     lang: str = _ALL,
     min_coverage: float = MIN_COVERAGE_PERCENT,
     require_all: bool = False,
     skipped_langs: str = "",
-) -> None:
+) -> list[CheckResult]:
     """Parse generated reports under `coverage/<lang>/` and enforce `min_coverage`.
 
     Every selected lane is accounted for. A lane with no report is `skipped` only
@@ -85,6 +85,4 @@ def check_coverage(
         raise ToolError(
             f"No coverage lane produced a report; looked for {', '.join(selected)} under coverage/."
         )
-    print(render(results))
-    if not publish_ready(results):
-        raise ToolError("Coverage did not fully pass; see the per-lane results above.")
+    return results

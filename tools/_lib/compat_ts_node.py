@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from tools._lib.program import resolve_program
-from tools._lib.status import CheckResult, failed, passed, skipped
+from tools._lib.status import CheckResult, passed
 from tools._lib.tarball_ref import tarball_ref
+from tools._lib.toolchain import missing_toolchain
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -174,15 +174,13 @@ def verify_node_consumers(
 ) -> CheckResult:
     """Install packed tarballs via `npm` and run native + WASM-fallback smoke tests in Node.js."""
     name = "ts-node-consumers"
-    absent = [binary for binary in (_NODE, _NPM) if shutil.which(binary) is None]
-    if absent:
-        reason = (
-            f"{_COMMA_SEP.join(absent)} not found on PATH, so the Node.js consumer install "
-            "and smoke tests did not run; install Node.js or run via `pixi run -e js ...`."
-        )
-        if require_node:
-            return failed(name, reason)
-        return skipped(name, reason)
+    if absence := missing_toolchain(
+        name,
+        (_NODE, _NPM),
+        hint="install Node.js or run via `pixi run -e js ...`",
+        required=require_node,
+    ):
+        return absence.as_result()
     for case in _node_consumer_cases(tarballs):
         consumer_dir = tmp_path / case.dirname
         manifest = _node_manifest(case.name, consumer_dir, case.dependencies, case.overrides)

@@ -81,7 +81,7 @@ not restate either.
 ### `pixi run tools run bindings build` (`bindings.build`)
 Build bindings (`all`, `py`, `wasm`, `napi`, `ts`, `ffi`, `kotlin|swift|ruby`).
 - Marks: rust, python, ts, ffi, writes
-- Options: --target &lt;str&gt;
+- Options: --target &lt;&#39;all&#39;|&#39;py&#39;|&#39;wasm&#39;|&#39;napi&#39;|&#39;ts&#39;|&#39;ffi&#39;|&#39;kotlin&#39;|&#39;swift&#39;|&#39;ruby&#39;&gt;
 
 ### `pixi run tools run check` (`check`)
 Run all offline repository policy, docs, formatting, and lint checks.
@@ -139,17 +139,17 @@ Render README.md, AGENTS.md, and .github templates from templates/.
 ### `pixi run tools run ffi build` (`ffi.build`)
 Build `polylib-ffi` and UniFFI bindings (`all`, `kotlin`, `swift`, `ruby`).
 - Marks: rust, ffi, writes
-- Options: --target &lt;str&gt;
+- Options: --target &lt;&#39;all&#39;|&#39;kotlin&#39;|&#39;swift&#39;|&#39;ruby&#39;&gt;
 
 ### `pixi run tools run ffi compat` (`ffi.compat`)
 Verify Kotlin JAR, SwiftPM C-ABI/Swift, and isolated Ruby gem compatibility.
 - Marks: rust, ffi, compat
-- Options: --target &lt;str&gt;, --require-toolchain &lt;bool&gt;
+- Options: --target &lt;&#39;all&#39;|&#39;kotlin&#39;|&#39;swift&#39;|&#39;ruby&#39;&gt;, --require-toolchain &lt;bool&gt;
 
 ### `pixi run tools run ffi test` (`ffi.test`)
 Run UniFFI tests (`all`, `kotlin`, `swift`, `ruby`) with optional &gt;=90% coverage.
 - Marks: rust, ffi
-- Options: --target &lt;str&gt;, --require-swift &lt;bool&gt;, --coverage &lt;bool&gt;, --min-coverage &lt;float&gt;
+- Options: --target &lt;&#39;all&#39;|&#39;kotlin&#39;|&#39;swift&#39;|&#39;ruby&#39;&gt;, --require-swift &lt;bool&gt;, --coverage &lt;bool&gt;, --min-coverage &lt;float&gt;
 
 ### `pixi run tools run ffi tox` (`ffi.tox`)
 Run UniFFI `tox` envs (`kotlin-compat`, `ruby-compat`, `swift-compat`).
@@ -230,7 +230,7 @@ Generate conventional changelog and append `report.md` for GitHub Releases.
 ### `pixi run tools run release pack` (`release.pack`)
 Pack release artifacts (`all`, `rust`, `npm`, `kotlin`, `ruby`, `swift`).
 - Marks: rust, ts, ffi, writes
-- Options: --target &lt;str&gt;, --output-dir &lt;str&gt;
+- Options: --target &lt;&#39;all&#39;|&#39;rust&#39;|&#39;npm&#39;|&#39;kotlin&#39;|&#39;ruby&#39;|&#39;swift&#39;&gt;, --output-dir &lt;str&gt;
 
 ### `pixi run tools run release repack_gh_npm` (`release.repack_gh_npm`)
 Re-scope packed npm `.tgz` tarballs for GitHub Packages (`npm.pkg.github.com`).
@@ -345,7 +345,7 @@ Run `tox` compatibility suites (`compat`, `python`, `npm`, `rust`, `ffi`, `all`)
 ### `pixi run tools run ts compat` (`ts.compat`)
 Pack npm tarballs and verify `publint`, `attw`, Bun, Node.js, and `tsc`.
 - Marks: ci, ts, compat
-- Options: --mode &lt;str&gt;
+- Options: --mode &lt;&#39;all&#39;|&#39;pack&#39;|&#39;bun&#39;|&#39;node&#39;|&#39;types&#39;&gt;
 
 ### `pixi run tools run ts lint` (`ts.lint`)
 Run Biome checks and TypeScript strict type-checking.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tasknest import ToolContext, ToolError, tool
+from tasknest import ToolContext, tool
 
 from tools._lib.coverage import MIN_COVERAGE_PERCENT
 from tools._lib.ffi import (
@@ -10,6 +10,7 @@ from tools._lib.ffi import (
     TARGET_KOTLIN,
     TARGET_RUBY,
     TARGET_SWIFT,
+    FfiBuildTarget,
     resolve_ffi_targets,
     test_kotlin,
     test_ruby,
@@ -20,20 +21,22 @@ from tools._lib.ffi_cov import (
     test_ruby_with_coverage,
     test_swift_with_coverage,
 )
-from tools._lib.status import CheckResult, passed, publish_ready, render
+from tools._lib.status import CheckResult, passed
+from tools._lib.verification import reports_verification
 
 
 @tool(
     marks=("rust", "ffi"),
     description="Run UniFFI tests (`all`, `kotlin`, `swift`, `ruby`) with optional >=90% coverage.",
 )
+@reports_verification("FFI tests")
 def test_ffi(
     ctx: ToolContext,
-    target: str = TARGET_ALL,
+    target: FfiBuildTarget = TARGET_ALL,
     require_swift: bool = False,
     coverage: bool = False,
     min_coverage: float = MIN_COVERAGE_PERCENT,
-) -> None:
+) -> list[CheckResult]:
     """Execute unit tests and shared Gherkin conformance suites for UniFFI bindings.
 
     Only lanes the target selects are reported. Excluding a lane is not a skip:
@@ -67,6 +70,4 @@ def test_ffi(
         else:
             test_ruby(ctx)
         results.append(passed("ruby-test", evidence="ruby suite ran"))
-    print(render(results))
-    if not publish_ready(results):
-        raise ToolError("FFI tests did not fully pass; see the per-lane results above.")
+    return results
