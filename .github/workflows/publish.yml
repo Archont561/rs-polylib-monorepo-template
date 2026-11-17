@@ -389,10 +389,16 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          # Release notes are the user-facing record of the release, so a
+          # convco that cannot run is a release blocker rather than a reason to
+          # quietly fall back to a raw `git log`. `convco` lives in the lint
+          # environment, not on the bare runner PATH.
+          pixi run -e lint convco --version
           pixi run -e lint tools run release changelog \
             --output RELEASE_NOTES.md \
             --tag "$RELEASE_TAG" \
             --report-md release-bundle/report.md
+          grep -q '^## ' RELEASE_NOTES.md
           cat RELEASE_NOTES.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish GitHub Release with changelog and all artifacts

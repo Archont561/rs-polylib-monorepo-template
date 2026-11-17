@@ -210,14 +210,31 @@ def generate_build_report(
     return json_path, md_path, sums_path
 
 
-def _convco_changelog(root: Path, tag: str) -> str:
-    if shutil.which("convco") is None or not (root / ".git").exists():
-        return ""
+def _convco_changelog(root: Path, tag: str) -> tuple[str, str]:
+    """Render the convco changelog and report why it was unavailable, if it was.
+
+    The caller falls back to `git log`, and that fallback looks plausible in a
+    release body. Returning a reason keeps a broken convco install visible in
+    the workflow log instead of silently degrading every release note.
+    """
+    if shutil.which("convco") is None:
+        return "", "convco is not on PATH"
+    if not (root / ".git").exists():
+        return "", "no .git directory (shallow or archive checkout)"
     cmd = ["convco", "changelog", "--max-versions", "1"]
     if tag:
         cmd.extend(["--unreleased", tag])
     proc = subprocess.run(cmd, cwd=root, capture_output=True, text=True, check=False)
-    return proc.stdout.strip() if proc.returncode == 0 else ""
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip().splitlines()
+        reason = detail[-1] if detail else f"exit {proc.returncode}"
+        return "", f"convco exited {proc.returncode}: {reason}"
+    body = proc.stdout.strip()
+    if not body:
+        # A repository whose history is all non-conventional commits renders an
+        # empty body rather than failing, so say so explicitly.
+        return "", "convco produced no changelog sections"
+    return body, ""
 
 
 def _git_log_fallback(root: Path) -> str:
@@ -246,10 +263,13 @@ def generate_release_changelog(
     """Generate release changelog markdown and optionally append `report.md`."""
     version = read_workspace_version(root)
     release_label = tag or f"v{version}"
-    body = _convco_changelog(root, release_label)
+    body, reason = _convco_changelog(root, release_label)
     if not body:
+        print(f"convco unavailable ({reason}); falling back to git log.")
         fallback_items = _git_log_fallback(root)
         body = f"## Changelog\n\n{fallback_items}"
+    else:
+        print("Rendered the changelog from conventional commits with convco.")
     sections = [f"# Release {release_label}\n\n{body.strip()}"]
     if report_md is not None and report_md.is_file():
         embedded = report_md.read_text(encoding=_UTF8).strip()

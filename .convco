@@ -1,0 +1,47 @@
+# convco configuration (https://github.com/convco/convco).
+#
+# convco reads YAML with camelCase keys. It drives two things here:
+#   - `tools run repo commit-msg` validates every commit message.
+#   - `tools run release changelog` renders the GitHub Release body.
+#
+# `host`, `owner`, and `repository` are intentionally absent: convco derives
+# them from `git remote origin`, which keeps the file correct after a fork or
+# rename instead of pinning a stale slug.
+
+# Release tags are `v<major>.<minor>.<patch>`. The `demo-v*` tags published by
+# `release-demo.yml` deliberately fall outside this prefix, so they never
+# become a changelog boundary.
+types:
+  - type: feat
+    section: Features
+  - type: fix
+    section: Bug Fixes
+  - type: perf
+    section: Performance
+  - type: refactor
+    section: Refactoring
+  - type: revert
+    section: Reverts
+  - type: docs
+    section: Documentation
+  - type: build
+    section: Build System
+  - type: ci
+    section: CI
+    hidden: true
+  - type: test
+    section: Tests
+    hidden: true
+  - type: chore
+    section: Chores
+    hidden: true
+  - type: style
+    section: Styling
+    hidden: true
+
+# `tools` is the only automation entrypoint, and every tool lives under it.
+scopeRegex: "^(tools|docs|policy|release|bindings|ci|deps|readme|vale|agents|compat|coverage|backlog)$"
+
+# Squash and rebase merges put the PR title in the history, so the merge
+# commit itself carries no information worth listing.
+merges: false
