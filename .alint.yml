@@ -226,6 +226,7 @@ rules:
       - .github/workflows/ci.yml
       - .github/workflows/pages.yml
       - .github/workflows/publish.yml
+      - .github/workflows/release-demo.yml
       - .github/workflows/security.yml
     schema_path: .alint/schemas/github-workflow-hardening.schema.json
     level: error
@@ -251,6 +252,20 @@ rules:
     message: >-
       Generated coverage, package dist, and docs export output must not be
       committed. Remove the directory and let the build recreate it.
+
+  # The demo release exists so a template adopter can watch the release path
+  # run before they hold credentials for five registries. The moment it learns a
+  # registry secret it stops being a rehearsal and starts being a publish, so
+  # the absence of those secrets is part of the contract.
+  - id: demo-release-needs-no-registry-secret
+    kind: file_content_forbidden
+    paths:
+      - .github/workflows/release-demo.yml
+    pattern: "CARGO_REGISTRY_TOKEN|PYPI_API_TOKEN|NPM_TOKEN|RUBYGEMS_API_KEY|MAVEN_CENTRAL"
+    level: error
+    message: >-
+      The demo release workflow must need no registry credential. It publishes
+      dummy packages to a GitHub Release and nothing else.
 
   # The Rust workspace and the Bun workspace publish under one version. Two
   # manifests carrying two numbers would ship packages that disagree about what

@@ -1,0 +1,203 @@
+name: Release Demo
+
+# Prove the release path without touching a package registry.
+#
+# `publish.yml` is the real thing, and every one of its jobs needs credentials
+# for crates.io, PyPI, npm, RubyGems, or Maven Central before the GitHub Release
+# job can run — the release waits on all of them. That makes the release path
+# the last thing a template adopter can exercise, and the first thing that
+# breaks when they finally try it.
+#
+# This workflow ships dummy packages to a GitHub Release only. It builds one
+# archive per ecosystem using the same file layouts the real build produces, so
+# the checksums, the release notes, the asset upload, and the download can all
+# be verified from a fresh clone with no secrets configured.
+#
+# It publishes nothing anywhere else: there is no registry step to disable and
+# no credential to set.
+
+on:
+  push:
+    tags:
+      - "demo-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the dummy packages (defaults to the workspace version)."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-demo-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-demo:
+    name: Build Dummy Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # A `demo-vX.Y.Z` tag carries the version. A manual run takes the
+          # input, and falls back to the workspace version so the default is
+          # never a number someone has to remember to bump.
+          version="${INPUT_VERSION:-}"
+          if [ -z "$version" ] && [[ "$REF_NAME" == demo-v* ]]; then
+            version="${REF_NAME#demo-v}"
+          fi
+          if [ -z "$version" ]; then
+            version="$(python3 -c 'import json;print(json.load(open("package.json"))["version"])')"
+          fi
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Not a semantic version: '$version'" >&2
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Building dummy packages at version ${version}."
+
+      - name: Build one archive per ecosystem
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/make_demo_packages.py \
+            --output-dir demo-dist \
+            --version "$VERSION" \
+            --repo "$REPOSITORY"
+
+      - name: Verify the checksums match the files
+        run: |
+          set -euo pipefail
+          cd demo-dist
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Summarize the bundle
+        run: |
+          set -euo pipefail
+          {
+            echo "### Demo release ${{ steps.version.outputs.version }}"
+            echo
+            echo "These are dummy packages. They prove the release pipeline works;"
+            echo "they are not published to any registry and carry no compiled code."
+            echo
+            echo "| File | Bytes |"
+            echo "|---|---|"
+            for f in demo-dist/*; do
+              printf '| `%s` | %s |\n' "$(basename "$f")" "$(wc -c < "$f")"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the demo bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-release-bundle
+          path: demo-dist/**
+          if-no-files-found: error
+
+  publish-demo:
+    name: Attach Dummy Packages to a GitHub Release
+    needs: build-demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the demo bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: demo-release-bundle
+          path: demo-dist
+
+      - name: Re-verify the checksums after the download
+        run: |
+          set -euo pipefail
+          cd demo-dist
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Write the release notes
+        env:
+          VERSION: ${{ needs.build-demo.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Dummy packages that prove the release pipeline works end to end."
+            echo
+            echo "Nothing here is published to crates.io, PyPI, npm, RubyGems, or"
+            echo "Maven Central. Every file is a placeholder with the extension,"
+            echo "internal layout, and manifest the real build produces, so an asset"
+            echo "can be downloaded and opened while the real registries stay"
+            echo "untouched."
+            echo
+            echo "### Assets"
+            echo
+            echo "| Ecosystem | File |"
+            echo "|---|---|"
+            echo "| Rust crate | \`polylib-demo-${VERSION}.crate\` |"
+            echo "| Python wheel | \`polylib_demo-${VERSION}-py3-none-any.whl\` |"
+            echo "| Python sdist | \`polylib-demo-${VERSION}.tar.gz\` |"
+            echo "| npm package | \`polylib-demo-${VERSION}.tgz\` |"
+            echo "| JVM jar | \`polylib-demo-${VERSION}.jar\` |"
+            echo "| Ruby gem | \`polylib-demo-${VERSION}.gem\` |"
+            echo "| SwiftPM bundle | \`polylib-demo-${VERSION}.zip\` |"
+            echo
+            echo "### Verify"
+            echo
+            echo '```console'
+            echo "gh release download demo-v${VERSION} --pattern '*'"
+            echo "sha256sum --check SHA256SUMS.txt"
+            echo '```'
+            echo
+            echo "Source: ${GITHUB_SERVER_URL}/${REPOSITORY}/tree/${GITHUB_SHA}"
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          name: Demo v${{ needs.build-demo.outputs.version }}
+          tag_name: demo-v${{ needs.build-demo.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          generate_release_notes: false
+          draft: false
+          prerelease: true
+          make_latest: false
+          files: |
+            demo-dist/*.crate
+            demo-dist/*.whl
+            demo-dist/*.tar.gz
+            demo-dist/*.tgz
+            demo-dist/*.jar
+            demo-dist/*.gem
+            demo-dist/*.zip
+            demo-dist/SHA256SUMS.txt
+            demo-dist/demo-manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
