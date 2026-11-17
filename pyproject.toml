@@ -12,6 +12,7 @@ known-first-party = ["polylib", "tools"]
 "packages/polylib-py/tests/**/*.py" = ["S101"]
 "tests/**/*.py" = ["S101"]
 "tools/**/*.py" = ["PT", "S603", "S607", "S701"]
+"tools/tests/**/*.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -29,7 +30,7 @@ module = ["tools.*"]
 disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
-testpaths = ["packages/polylib-py/tests"]
+testpaths = ["packages/polylib-py/tests", "tools/tests"]
 markers = [
   "bdd: Behavior-driven Gherkin scenarios",
   "conformance: Cross-language conformance vectors",
