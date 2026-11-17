@@ -20,7 +20,7 @@ from tools._lib.ffi_cov import (
     test_ruby_with_coverage,
     test_swift_with_coverage,
 )
-from tools._lib.status import CheckResult, passed, publish_ready, render, skipped
+from tools._lib.status import CheckResult, passed, publish_ready, render
 
 
 @tool(
@@ -36,7 +36,11 @@ def test_ffi(
 ) -> None:
     """Execute unit tests and shared Gherkin conformance suites for UniFFI bindings.
 
-    A lane whose toolchain is absent reports `skipped` with a reason. Pass
+    Only lanes the target selects are reported. Excluding a lane is not a skip:
+    `--target kotlin` is a complete run of what was asked for, and marking the
+    unselected lane `skipped` would make every scoped run refuse to pass.
+
+    A selected lane whose toolchain is absent reports `skipped` with a reason. Pass
     `require_swift` on a macOS runner, where Swift is expected, to turn that
     skip into a failure instead of letting the job pass without running it.
     """
@@ -57,10 +61,6 @@ def test_ffi(
             )
         else:
             results.append(test_swift(ctx, require_toolchain=require_swift))
-    else:
-        results.append(
-            skipped("swift-test", f"target {target!r} excludes Swift; select `swift` or `all`.")
-        )
     if TARGET_RUBY in targets:
         if coverage:
             test_ruby_with_coverage(ctx, min_coverage=min_coverage)
