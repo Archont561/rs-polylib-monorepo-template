@@ -21,9 +21,9 @@ RELEASE_NOTES.md
 **/dist/
 **/build/
 target/
-apps/docs/.next/
-apps/docs/out/
-apps/docs/.source/
+docs/.next/
+docs/out/
+docs/.source/
 packages/polylib-py/src/polylib/_native*.so
 packages/polylib-py/src/polylib/_native*.pyd
 packages/polylib-js/src/native/

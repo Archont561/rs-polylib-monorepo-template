@@ -62,7 +62,7 @@ One pure Rust core (`crates/polylib-core`, `#![forbid(unsafe_code)]`) powers six
 - **Python packages (1):** `packages/polylib-py`
 - **TypeScript packages (4):** `@polylib/config`, `@polylib/polylib-js`, `@polylib/polylib`, `@polylib/polylib-wasm`
 - **UniFFI packages (3):** `packages/polylib-kt`, `packages/polylib-rb`, `packages/polylib-swift`
-- **Documentation apps (1):** `apps/docs`
+- **Documentation apps (1):** `docs/`
 - **Shared contracts and automation:** `conformance/*.feature` specs run across `rstest-bdd`, `pytest-bdd`, `@aboviq/bun-test-cucumber`, Cucumber-JVM, XCTest, and Cucumber Ruby. Nested Tasknest `@tool` tasks live under `tools/` alongside `templates/`, `.alint/`, `.agents/skills/`, and `backlog/`.
 
 ## Quickstart
@@ -104,7 +104,7 @@ pixi run -e ffi tools run ffi tox           # Tox UniFFI compatibility envs (kot
 - **Per-language coverage (`coverage/<lang>/`, 90% threshold):** Each language writes its own report (`lcov.info` or `jacoco.xml`) and enforces a 90% line coverage threshold locally and in CI. Workflows upload each language independently to GitHub Actions artifacts (`coverage-<lang>`) and Codecov (`.codecov.yml` flags `rust`, `python`, `ts`, `kotlin`, `ruby`, and `swift`).
 - **Offline sandbox:** `pixi-sandbox.toml` packs Linux (`linux-64`) locked environments and vendored Cargo sources (`cargo_vendor = true`) via `scripts/restore.sh`. Optional `kt`, `rb`, and `ffi` environments stay outside the `developer` bundle to preserve transport budgets.
 - **Build and release workflows:** `.github/workflows/build.yml` compiles and packs all six ecosystems, generates `report.json`, renders `report.md` with Jinja2 (`templates/build-report.md.j2`), and uploads `SHA256SUMS.txt`. `.github/workflows/publish.yml` publishes via OIDC Trusted Publishing to crates.io, PyPI, npm, and RubyGems, plus Maven Central, GitHub Packages, and GitHub Releases in isolated environments.
-- **Documentation site:** `apps/docs` exports a static Fumadocs site (`pixi run -e docs tools run docs build`). `.github/workflows/pages.yml` always validates and builds the site, and automatically deploys only when GitHub Pages uses GitHub Actions (`ENABLE_PAGES=false` opts out).
+- **Documentation site:** `docs` exports a static Fumadocs site (`pixi run -e docs tools run docs build`). `.github/workflows/pages.yml` always validates and builds the site, and automatically deploys only when GitHub Pages uses GitHub Actions (`ENABLE_PAGES=false` opts out).
 - **Templated docs and GitHub forms:** Edit `templates/` and run `pixi run tools run docs write`. CI verifies template parity with `docs check`.
 
 See [AGENTS.md](AGENTS.md) for coding-agent instructions and [`.agents/skills/project-tools/SKILL.md`](.agents/skills/project-tools/SKILL.md) for the generated task catalog.

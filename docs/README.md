@@ -4,7 +4,7 @@ Static Fumadocs documentation site for the `polylib` Rust, Python, and TypeScrip
 
 ## Responsibilities
 
-- Publishes user guides and API reference pages as a Next.js static export (`apps/docs/out`) to GitHub Pages.
+- Publishes user guides and API reference pages as a Next.js static export (`docs/out`) to GitHub Pages.
 - Requires enabling GitHub Pages once under **Settings -> Pages -> Source: GitHub Actions**.
 - Remains isolated from runtime library build artifacts.
 

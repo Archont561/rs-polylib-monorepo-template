@@ -8,8 +8,8 @@ from tasknest import ToolContext, ToolError, tool
 
 _UTF8 = "utf-8"
 _SLASH = "/"
-_EXPORT_DIR = Path("apps/docs/out")
-_CONTENT_DIR = Path("apps/docs/content/docs")
+_EXPORT_DIR = Path("docs/out")
+_CONTENT_DIR = Path("docs/content/docs")
 _DOCS_ROUTE = "/docs"
 
 

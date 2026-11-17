@@ -27,7 +27,7 @@ Read this file before editing code, manifests, or workflows.
 - **Python packages:** `packages/polylib-py`
 - **TypeScript packages:** `@polylib/config`, `@polylib/polylib-js`, `@polylib/polylib`, `@polylib/polylib-wasm`
 - **UniFFI packages:** `packages/polylib-kt`, `packages/polylib-rb`, `packages/polylib-swift`
-- **Docs apps:** `apps/docs`
+- **Docs apps:** `docs/`
 
 ## Verification commands
 

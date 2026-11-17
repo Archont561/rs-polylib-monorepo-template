@@ -10,7 +10,7 @@
     "packages/polylib-js",
     "packages/polylib-ts",
     "packages/polylib-wasm",
-    "apps/docs"
+    "docs"
   ],
   "devDependencies": {
     "@biomejs/biome": "2.6.8",

@@ -264,8 +264,8 @@ rules:
     paths:
       - coverage
       - "**/dist"
-      - apps/docs/out
-      - apps/docs/.next
+      - docs/out
+      - docs/.next
     level: error
     message: >-
       Generated coverage, package dist, and docs export output must not be
@@ -548,12 +548,12 @@ rules:
 
   - id: require-docs-app-layout
     kind: dir_contains
-    select: "apps/*"
+    select: "docs"
     require:
       - package.json
       - README.md
     level: error
-    message: "Every app under apps/* must contain package.json and README.md."
+    message: "The docs app must contain package.json and README.md."
 
   # --- JSON Schema policy contracts (.alint/schemas/*.schema.json) --------
   - id: pixi-only-tools-task
@@ -582,17 +582,17 @@ rules:
 
   - id: schema-docs-app-package
     kind: json_schema_passes
-    paths: "apps/*/package.json"
+    paths: "docs/package.json"
     format: json
     schema_path: .alint/schemas/docs-app-package.schema.json
     level: error
-    message: "Every app package.json under apps/* must be private ESM named @polylib/app-*."
+    message: "The docs app package.json must be private ESM named @polylib/app-*."
 
   - id: schema-ts-tsconfig
     kind: json_schema_passes
     paths:
       - "packages/*/tsconfig.json"
-      - "apps/*/tsconfig.json"
+      - "docs/tsconfig.json"
     format: json
     schema_path: .alint/schemas/ts-tsconfig.schema.json
     level: error
