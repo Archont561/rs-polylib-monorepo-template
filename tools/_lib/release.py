@@ -8,12 +8,16 @@ import json
 import os
 import shutil
 import subprocess
+import tarfile
+import zipfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import tomllib
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from tasknest import ToolError
+
+from tools._lib.status import Status
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,6 +26,8 @@ _UTF8 = "utf-8"
 _NL = "\n"
 _KEY_NAME = "name"
 _KEY_STATUS = "status"
+_KEY_REASON = "reason"
+_COMMA_SEP = ", "
 _REPORT_JSON = "report.json"
 _REPORT_MD = "report.md"
 _CHECKSUMS_FILE = "SHA256SUMS.txt"
@@ -29,6 +35,7 @@ _TEMPLATE_NAME = "build-report.md.j2"
 _DIST_GLOB_SKIP = {_REPORT_JSON, _REPORT_MD, _CHECKSUMS_FILE}
 _ECO_KOTLIN = "kotlin"
 _ECO_SWIFT = "swift"
+_SWIFT_PREFIX = "polylib-swift"
 
 _ECOSYSTEM_RULES: tuple[tuple[str, str, str], ...] = (
     (".crate", "rust", "crates.io"),
@@ -73,10 +80,22 @@ class ReportMetadata:
 
 
 def read_workspace_version(root: Path) -> str:
-    """Read the canonical workspace package version from root `Cargo.toml`."""
-    data = tomllib.loads((root / "Cargo.toml").read_text(encoding=_UTF8))
+    """Read the canonical workspace version from root `Cargo.toml`, failing closed.
+
+    This value names real artifacts, so a default would stamp an invented
+    version onto a gem and a SwiftPM tarball. There is no legitimate case for
+    a fallback: a missing key means the manifest is broken.
+    """
+    manifest = root / "Cargo.toml"
+    data = tomllib.loads(manifest.read_text(encoding=_UTF8))
     ws_pkg = data.get("workspace", {}).get("package", {})
-    return str(ws_pkg.get("version", "0.1.0"))
+    version = ws_pkg.get("version")
+    if not isinstance(version, str) or not version.strip():
+        raise ToolError(
+            f"{manifest} must declare [workspace.package] version; a missing version "
+            "cannot be defaulted because it names the release artifacts."
+        )
+    return version
 
 
 def _format_size(num_bytes: int) -> str:
@@ -97,17 +116,60 @@ def _sha256_file(path: Path) -> str:
 
 
 def _classify_artifact(rel_path: str) -> tuple[str, str]:
+    """Map a path to an ecosystem and registry, treating the extension as a hypothesis.
+
+    The guess is checked against the artifact's contents in `_verify_artifact`,
+    because a misnamed file reported against a registry it cannot be uploaded to
+    is worse than an honest "unverified".
+    """
     lower = rel_path.lower()
     for suffix, ecosystem, registry in _ECOSYSTEM_RULES:
         if lower.endswith(suffix):
             return ecosystem, registry
-    if _ECO_SWIFT in lower and lower.endswith(".tar.gz"):
+    # The Swift bundle is packed under a known prefix, so match that rather than
+    # any directory whose name happens to contain "swift".
+    if lower.startswith(_SWIFT_PREFIX) and lower.endswith(".tar.gz"):
         return _ECO_SWIFT, "GitHub Releases (SwiftPM)"
     if lower.endswith(".tar.gz"):
         return "python", "PyPI (sdist)"
     if lower.endswith(".pom"):
         return _ECO_KOTLIN, "GitHub Packages Maven / Maven Central"
     return "other", "GitHub Releases"
+
+
+def _verify_artifact(path: Path, ecosystem: str) -> tuple[bool, str]:
+    """Check an artifact's contents agree with the ecosystem its extension implies."""
+    try:
+        if ecosystem == "python" and path.suffix == ".whl":
+            with zipfile.ZipFile(path) as archive:
+                names = archive.namelist()
+            ok = any(name.endswith(".dist-info/WHEEL") for name in names) and any(
+                name.endswith(".dist-info/METADATA") for name in names
+            )
+            return ok, "wheel carries .dist-info/WHEEL and METADATA" if ok else "no .dist-info"
+        if ecosystem == "rust":
+            with tarfile.open(path) as archive:
+                names = archive.getnames()
+            ok = any(name.endswith("Cargo.toml") for name in names)
+            return ok, "crate archive carries Cargo.toml" if ok else "no Cargo.toml in archive"
+        if ecosystem == "ruby":
+            with tarfile.open(path) as archive:
+                names = archive.getnames()
+            ok = any(name.endswith("metadata.gz") for name in names)
+            return ok, "gem carries metadata.gz" if ok else "no metadata.gz in gem"
+        if ecosystem == "npm":
+            with tarfile.open(path) as archive:
+                names = archive.getnames()
+            ok = "package/package.json" in names
+            return ok, "tarball carries package/package.json" if ok else "no package/package.json"
+        if ecosystem == _ECO_KOTLIN and path.suffix == ".jar":
+            with zipfile.ZipFile(path) as archive:
+                names = archive.namelist()
+            ok = "META-INF/MANIFEST.MF" in names
+            return ok, "jar carries META-INF/MANIFEST.MF" if ok else "no MANIFEST.MF in jar"
+    except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
+        return False, f"could not open the archive: {exc}"
+    return True, f"no content check defined for {ecosystem}{path.suffix}"
 
 
 def _collect_artifact_records(artifacts_dir: Path) -> list[dict[str, Any]]:
@@ -118,12 +180,16 @@ def _collect_artifact_records(artifacts_dir: Path) -> list[dict[str, Any]]:
         rel = path.relative_to(artifacts_dir).as_posix()
         size_bytes = path.stat().st_size
         ecosystem, registry = _classify_artifact(rel)
+        verified, note = _verify_artifact(path, ecosystem)
         records.append(
             {
                 _KEY_NAME: path.name,
                 "path": rel,
-                "ecosystem": ecosystem,
-                "registry": registry,
+                "ecosystem": ecosystem if verified else "unverified",
+                "registry": registry if verified else "unverified",
+                "classified_by": f"extension{path.suffix}",
+                "verified": verified,
+                "verification_note": note,
                 "size_bytes": size_bytes,
                 "size_human": _format_size(size_bytes),
                 "sha256": _sha256_file(path),
@@ -132,20 +198,72 @@ def _collect_artifact_records(artifacts_dir: Path) -> list[dict[str, Any]]:
     return records
 
 
-def _parse_checks(raw_checks: str) -> list[dict[str, str]]:
+_VALID_CHECK_STATUSES: tuple[str, ...] = tuple(status.value for status in Status)
+
+
+def _parse_checks(raw_checks: str) -> list[dict[str, Any]]:
+    """Parse `name=status` pairs, rejecting unknown statuses and unreasoned non-passes.
+
+    An empty spec reports `not-run` rather than a passing build: the report is
+    read as evidence, so inventing a success is worse than saying nothing ran.
+    """
     if not raw_checks.strip():
-        return [{_KEY_NAME: "build", _KEY_STATUS: "success"}]
-    parsed: list[dict[str, str]] = []
+        return [
+            {
+                _KEY_NAME: "build",
+                _KEY_STATUS: Status.NOT_RUN.value,
+                _KEY_REASON: "CHECKS_SPEC was empty; no checks were reported",
+            }
+        ]
+    parsed: list[dict[str, Any]] = []
     for entry in raw_checks.split(","):
         cleaned = entry.strip()
         if not cleaned:
             continue
-        if "=" in cleaned:
-            name, status = cleaned.split("=", 1)
-            parsed.append({_KEY_NAME: name.strip(), _KEY_STATUS: status.strip()})
-        else:
-            parsed.append({_KEY_NAME: cleaned, _KEY_STATUS: "success"})
+        name, _, rest = cleaned.partition("=")
+        status_text, _, reason = rest.partition(":")
+        status = status_text.strip() or Status.PASSED.value
+        if status not in _VALID_CHECK_STATUSES:
+            allowed = _COMMA_SEP.join(_VALID_CHECK_STATUSES)
+            raise ToolError(
+                f"Unknown check status {status!r} for {name.strip()!r}; expected one of: {allowed}."
+            )
+        record: dict[str, Any] = {_KEY_NAME: name.strip(), _KEY_STATUS: status}
+        reason_text = reason.strip()
+        if status != Status.PASSED.value:
+            if not reason_text:
+                raise ToolError(
+                    f"Check {name.strip()!r} has status {status!r} but no reason; "
+                    "write `name=status:reason` so the report explains the non-pass."
+                )
+            record[_KEY_REASON] = reason_text
+        elif reason_text:
+            record[_KEY_REASON] = reason_text
+        parsed.append(record)
     return parsed
+
+
+def _publish_ready(checks: list[dict[str, Any]], records: list[dict[str, Any]]) -> bool:
+    """Publication needs every check to pass and every artifact to be identified."""
+    checks_pass = bool(checks) and all(item[_KEY_STATUS] == Status.PASSED.value for item in checks)
+    artifacts_verified = all(bool(item.get("verified")) for item in records)
+    return checks_pass and artifacts_verified and bool(records)
+
+
+def _blocking_reasons(checks: list[dict[str, Any]], records: list[dict[str, Any]]) -> list[str]:
+    """List why publication is blocked, so the report states it rather than implying it."""
+    reasons = [
+        f"{item[_KEY_NAME]}: {item[_KEY_STATUS]}"
+        + (f" - {item[_KEY_REASON]}" if item.get(_KEY_REASON) else "")
+        for item in checks
+        if item[_KEY_STATUS] != Status.PASSED.value
+    ]
+    reasons.extend(
+        f"{item['path']}: artifact could not be verified as {item['ecosystem']}"
+        for item in records
+        if not item.get("verified")
+    )
+    return reasons
 
 
 def _render_report_markdown(root: Path, report_data: dict[str, Any]) -> str:
@@ -167,8 +285,11 @@ def _build_report_payload(
 ) -> dict[str, Any]:
     total_bytes = sum(int(item["size_bytes"]) for item in records)
     ecosystems = sorted({str(item["ecosystem"]) for item in records})
+    checks = _parse_checks(meta.checks_spec)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "publish_ready": _publish_ready(checks, records),
+        "blocking": _blocking_reasons(checks, records),
         "version": read_workspace_version(root),
         "git_ref": meta.git_ref,
         "git_sha": meta.git_sha,
@@ -180,7 +301,7 @@ def _build_report_payload(
             "total_size_human": _format_size(total_bytes),
             "ecosystems": ecosystems,
         },
-        "checks": _parse_checks(meta.checks_spec),
+        "checks": checks,
         "artifacts": records,
     }
 

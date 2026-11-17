@@ -2,11 +2,22 @@
 
 Generated from `report.json` via Jinja2 (`templates/build-report.md.j2`).
 
+**Publish-ready:** {% if publish_ready %}`true`{% else %}`false`{% endif %}
+{% if not publish_ready and blocking %}
+
+Blocking issues:
+
+{% for reason in blocking %}
+- {{ reason }}
+{% endfor %}
+{% endif %}
+
 ## Build Metadata
 
 | Field | Value |
 | :--- | :--- |
 | **Version** | `{{ version }}` |
+| **Schema Version** | `{{ schema_version }}` |
 | **Git Ref** | `{{ git_ref }}` |
 | **Commit SHA** | `{{ git_sha }}` |
 | **Generated (UTC)** | `{{ generated_at }}` |
@@ -17,10 +28,10 @@ Generated from `report.json` via Jinja2 (`templates/build-report.md.j2`).
 ## Artifact Inventory
 
 {% if artifacts %}
-| Ecosystem | File | Size | Target Registry | SHA-256 |
+| Ecosystem | File | Size | Target Registry | Contents Verified |
 | :--- | :--- | ---: | :--- | :--- |
 {% for item in artifacts %}
-| `{{ item.ecosystem }}` | `{{ item.path }}` | `{{ item.size_human }}` | {{ item.registry }} | `{{ item.sha256[:16] }}...` |
+| `{{ item.ecosystem }}` | `{{ item.path }}` | `{{ item.size_human }}` | {{ item.registry }} | {% if item.verified %}yes{% else %}**no** — {{ item.verification_note }}{% endif %} |
 {% endfor %}
 {% else %}
 No release artifacts were discovered in the input directory.
@@ -28,13 +39,16 @@ No release artifacts were discovered in the input directory.
 
 ## Verification Gates
 
-| Gate | Status |
-| :--- | :--- |
+| Gate | Status | Reason |
+| :--- | :--- | :--- |
 {% for check in checks %}
-| `{{ check.name }}` | `{{ check.status }}` |
+| `{{ check.name }}` | `{{ check.status }}` | {{ check.reason or "" }} |
 {% endfor %}
 
 ## SHA-256 Checksums
+
+A container hash proves the file arrived intact; it says nothing about what is
+inside, which is why the inventory records the contents check separately.
 
 ```text
 {% for item in artifacts %}
