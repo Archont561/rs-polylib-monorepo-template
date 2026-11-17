@@ -1,0 +1,15 @@
+---
+extends: substitution
+message: "Use the imperative '%s' instead of '%s'."
+level: warning
+ignorecase: false
+link: https://learn.microsoft.com/en-us/style-guide/procedures-instructions/writing-step-by-step-instructions
+action:
+  name: replace
+swap:
+  'Click on': Select
+  'click on': select
+  'log into': sign in to
+  'Log into': Sign in to
+  'e-mail': email
+  'E-mail': Email

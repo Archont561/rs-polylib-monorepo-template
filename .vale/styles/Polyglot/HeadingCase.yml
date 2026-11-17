@@ -1,0 +1,31 @@
+---
+extends: capitalization
+message: "Use sentence case in headings: '%s'."
+level: warning
+scope: heading
+match: $sentence
+exceptions:
+  - GitHub Actions
+  - Tasknest
+  - Polylib
+  - Polyglot
+  - Rust
+  - Python
+  - TypeScript
+  - JavaScript
+  - Kotlin
+  - Swift
+  - Ruby
+  - WebAssembly
+  - Pixi
+  - Codecov
+  - UniFFI
+  - NAPI
+  - NAPI-RS
+  - WASM
+  - JVM
+  - JDK
+  - MSRV
+  - API
+  - CLI
+  - ESM

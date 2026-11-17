@@ -1,4 +1,8 @@
-"""Lint English technical documentation prose with Vale (Microsoft preset)."""
+"""Lint English technical documentation prose with Vale.
+
+Runs every style enabled in `.vale.ini`: the Microsoft Writing Style Guide
+preset, the alex inclusive-language package, and the house `Polyglot` rules.
+"""
 
 from __future__ import annotations
 
@@ -20,10 +24,10 @@ def _vale_targets(ctx: ToolContext) -> list[str]:
 
 @tool(
     marks=("fast", "ci", "docs"),
-    description="Lint English technical prose with Vale using the Microsoft style preset.",
+    description="Lint English technical prose with Vale (Microsoft, alex, and house styles).",
 )
 def lint_prose(ctx: ToolContext, sync: bool = False) -> None:
-    """Run Vale (Microsoft Writing Style Guide) over top-level documentation."""
+    """Run Vale over the top-level documentation and every MDX page."""
     if sync:
         ctx.run(["vale", "sync"], cwd=ctx.repo_root)
     ctx.run(["vale", *_vale_targets(ctx)], cwd=ctx.repo_root)

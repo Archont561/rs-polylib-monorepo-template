@@ -1,0 +1,12 @@
+---
+extends: existence
+message: "Put no space around an em dash: 'word—word', not 'word — word'."
+level: warning
+nonword: true
+scope: sentence
+link: https://learn.microsoft.com/en-us/style-guide/punctuation/dashes-hyphens/emes
+# `\s—` and `—\s` cover the two spaced forms. A short lookahead is not needed,
+# and Vale's RE2 engine would reject it, so the patterns stay non-capturing.
+raw:
+  - '\s—'
+  - '—\s'

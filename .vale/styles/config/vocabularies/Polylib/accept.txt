@@ -2,6 +2,7 @@ ABI
 actionlint
 [Aa]gent
 alint
+alex
 attw
 Backlog\.md
 Biome

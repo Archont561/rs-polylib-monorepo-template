@@ -1,0 +1,15 @@
+---
+extends: existence
+message: "Documentation states what is true now. Remove the future promise '%s'."
+level: warning
+ignorecase: true
+link: https://learn.microsoft.com/en-us/style-guide/grammar/verbs
+tokens:
+  - coming soon
+  - in a future release
+  - will be added
+  - will be available
+  - is planned
+  - are planned
+  - is not yet supported
+  - not yet implemented

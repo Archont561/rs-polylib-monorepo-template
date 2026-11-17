@@ -1,0 +1,11 @@
+---
+extends: existence
+message: "'%s' is template scaffolding; replace it before publishing."
+level: error
+ignorecase: false
+link: https://github.com/Archont561/rs-polylib-monorepo-template#quickstart
+tokens:
+  - your-org/polyglot-lib-template
+  - lorem ipsum
+  - '<insert '
+  - XXX
