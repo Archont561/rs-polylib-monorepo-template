@@ -23,6 +23,7 @@ from tools._lib.coverage import (
     parse_jacoco_xml,
     parse_lcov,
 )
+from tools._lib.ffi_platform import require_tool as _require_tool
 
 if TYPE_CHECKING:
     from tasknest import ToolContext
@@ -36,13 +37,6 @@ _PACKAGES_DIR = "packages"
 _TEST_CMD = "test"
 _UTF8 = "utf-8"
 _SWIFT_PREFIXES: tuple[str, ...] = ("packages/polylib-swift/Sources/Polylib/",)
-
-
-def _require_tool(binary: str, pixi_env: str) -> None:
-    if shutil.which(binary) is None:
-        raise ToolError(
-            f"Required `{binary}` tool not found on PATH; run via `pixi run -e {pixi_env} ...`."
-        )
 
 
 def test_kotlin_with_coverage(

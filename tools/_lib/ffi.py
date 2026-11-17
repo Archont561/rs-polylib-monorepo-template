@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import os
-import platform
 import shutil
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tasknest import ToolError
+
+from tools._lib.ffi_platform import (
+    cdylib_filename,
+    jna_platform_dir,
+)
+from tools._lib.ffi_platform import (
+    require_tool as _require_tool,
+)
 
 if TYPE_CHECKING:
     from tasknest import ToolContext
@@ -54,13 +60,6 @@ _RUBY_LOADER_LINE = "  ffi_lib Polylib::NativeLoader.library_candidates"
 _SWIFT_MODULEMAP = (
     f'module {_SWIFT_INTERNAL_MOD} {{\n    header "{_SWIFT_HEADER_FILE}"\n    export *\n}}\n'
 )
-_SMOKE_RUBY = (
-    'require "polylib"; '
-    'raise "version" unless Polylib.ffi_version == Polylib::VERSION; '
-    'raise "slug" unless Polylib.normalize_slug("Hello, Ruby Gem!") == "hello-ruby-gem"; '
-    "s = Polylib.summarize_scores([10.0, 20.0, 30.0]); "
-    'raise "summary" unless s.count == 3 && s.mean == 20.0'
-)
 
 
 def resolve_ffi_targets(target: str) -> tuple[str, ...]:
@@ -71,28 +70,6 @@ def resolve_ffi_targets(target: str) -> tuple[str, ...]:
     if target == TARGET_ALL:
         return (TARGET_KOTLIN, TARGET_SWIFT, TARGET_RUBY)
     return (target,)
-
-
-def cdylib_filename() -> str:
-    """Return the host platform shared-library filename for `polylib-ffi`."""
-    system = platform.system().lower()
-    if system == "darwin":
-        return f"lib{_LIB_STEM}.dylib"
-    if system == "windows":
-        return f"{_LIB_STEM}.dll"
-    return f"lib{_LIB_STEM}.so"
-
-
-def jna_platform_dir() -> str:
-    """Return the JNA classpath resource subdirectory for the current host OS/arch."""
-    system = platform.system().lower()
-    machine = platform.machine().lower()
-    arch = "aarch64" if machine in ("arm64", "aarch64") else "x86-64"
-    if system == "darwin":
-        return f"darwin-{arch}"
-    if system == "windows":
-        return f"win32-{arch}"
-    return f"linux-{arch}"
 
 
 def build_cdylib(ctx: ToolContext) -> Path:
@@ -191,13 +168,6 @@ def build_ffi_targets(ctx: ToolContext, target: str = TARGET_ALL) -> None:
         stagers[lang](ctx, cdylib)
 
 
-def _require_tool(binary: str, pixi_env: str) -> None:
-    if shutil.which(binary) is None:
-        raise ToolError(
-            f"Required `{binary}` tool not found on PATH; run via `pixi run -e {pixi_env} ...`."
-        )
-
-
 def test_kotlin(ctx: ToolContext) -> None:
     """Run Kotlin JUnit 5 and Cucumber-JVM shared conformance tests via Gradle."""
     _require_tool(_GRADLE_BIN, "kt")
@@ -248,73 +218,3 @@ def test_swift(ctx: ToolContext, *, require_toolchain: bool = False) -> None:
         )
         return
     ctx.run([TARGET_SWIFT, _TEST_CMD], cwd=swift_root)
-
-
-def compat_kotlin(ctx: ToolContext) -> None:
-    """Build Kotlin JAR and verify manifest, classes, and bundled JNA shared library."""
-    _require_tool(_GRADLE_BIN, "kt")
-    kt_root = ctx.repo_root / _PACKAGES_DIR / _KT_DIR
-    ctx.run([_GRADLE_BIN, "clean", "check", "jar", "--no-daemon"], cwd=kt_root)
-    jars = sorted((kt_root / _BUILD_CMD / "libs").glob("polylib-*.jar"))
-    if not jars:
-        raise ToolError("Expected built Kotlin JAR under packages/polylib-kt/build/libs/.")
-    expected_native = f"{jna_platform_dir()}/{cdylib_filename()}"
-    with zipfile.ZipFile(jars[0]) as archive:
-        names = set(archive.namelist())
-    required = ("META-INF/MANIFEST.MF", "dev/polylib/Polylib.class", expected_native)
-    missing = [item for item in required if item not in names]
-    if missing:
-        raise ToolError(f"Built Kotlin JAR missing expected entries: {_COMMA_SEP.join(missing)}")
-    print(f"Kotlin JAR compatibility OK: {jars[0].name} ({len(names)} entries)")
-
-
-def _isolated_ruby_env(gem_home: Path, rb_root: Path) -> dict[str, str]:
-    iso_env = dict(os.environ)
-    iso_env["GEM_HOME"] = str(gem_home)
-    paths = [str(gem_home)]
-    vendor_ruby = rb_root / "vendor" / _BUNDLE_BIN / TARGET_RUBY
-    if vendor_ruby.is_dir():
-        paths.extend(str(p) for p in sorted(vendor_ruby.iterdir()) if p.is_dir())
-    iso_env["GEM_PATH"] = os.pathsep.join(paths)
-    return iso_env
-
-
-def compat_ruby(ctx: ToolContext) -> None:
-    """Build Ruby `.gem`, install into an isolated `GEM_HOME`, and run a smoke test."""
-    _require_tool(_GEM_BIN, "rb")
-    rb_root = ctx.repo_root / _PACKAGES_DIR / _RB_DIR
-    env = _ensure_ruby_bundle(ctx, rb_root)
-    with tempfile.TemporaryDirectory(prefix="polylib-rb-compat-") as tmp_str:
-        tmp_dir = Path(tmp_str)
-        gem_home = tmp_dir / "gems"
-        gem_out = tmp_dir / "polylib.gem"
-        build_cmd = [_GEM_BIN, _BUILD_CMD, "polylib.gemspec", "--output", str(gem_out)]
-        ctx.run(build_cmd, cwd=rb_root, env=env)
-        iso_env = _isolated_ruby_env(gem_home, rb_root)
-        install_cmd = [
-            _GEM_BIN,
-            "install",
-            "--local",
-            "--no-document",
-            "--ignore-dependencies",
-            "--install-dir",
-            str(gem_home),
-            str(gem_out),
-        ]
-        ctx.run(install_cmd, cwd=tmp_dir, env=iso_env)
-        ctx.run([TARGET_RUBY, "-e", _SMOKE_RUBY], cwd=tmp_dir, env=iso_env)
-    print("Ruby gem compatibility OK: isolated GEM_HOME install + native FFI smoke test passed.")
-
-
-def compat_swift(ctx: ToolContext) -> None:
-    """Verify SwiftPM package artifacts and run `swift build`/`swift test` when Swift is present."""
-    swift_root = ctx.repo_root / _PACKAGES_DIR / _SWIFT_DIR
-    _verify_swift_artifacts(swift_root)
-    if shutil.which(TARGET_SWIFT) is None:
-        print(
-            "SwiftPM artifact compatibility OK (Swift toolchain absent on host; run on macOS CI)."
-        )
-        return
-    ctx.run([TARGET_SWIFT, _BUILD_CMD], cwd=swift_root)
-    ctx.run([TARGET_SWIFT, _TEST_CMD], cwd=swift_root)
-    print("SwiftPM compatibility OK: build and conformance tests passed.")

@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import argparse
 import os
-import platform
 import shutil
-import sys
 import tempfile
 import zipfile
 from pathlib import Path
 
+from tools._lib.ffi_platform import (
+    cdylib_filename,
+    isolated_ruby_env,
+    jna_platform_dir,
+    require_tool,
+)
 from tools._lib.stdlib_proc import run_checked
 
 TARGET_ALL = "all"
@@ -73,31 +77,6 @@ int main(void) {
 """
 
 
-def _cdylib_filename() -> str:
-    if sys.platform == "darwin":
-        return f"lib{_FFI_LIB_STEM}.dylib"
-    if sys.platform == "win32":
-        return f"{_FFI_LIB_STEM}.dll"
-    return f"lib{_FFI_LIB_STEM}.so"
-
-
-def _jna_platform_dir() -> str:
-    machine = platform.machine().lower()
-    arch = "aarch64" if machine in {"arm64", "aarch64"} else "x86-64"
-    if sys.platform == "darwin":
-        return f"darwin-{arch}"
-    if sys.platform == "win32":
-        return f"win32-{arch}"
-    return f"linux-{arch}"
-
-
-def _require_tool(binary: str, pixi_env: str) -> None:
-    if shutil.which(binary) is None:
-        raise RuntimeError(
-            f"Required tool `{binary}` not found on PATH. Run via `pixi run -e {pixi_env} ...`."
-        )
-
-
 def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> None:
     cp_file = kt_root / _BUILD_CMD / "runtime-classpath.txt"
     if not cp_file.is_file() or shutil.which("javac") is None or shutil.which("java") is None:
@@ -115,7 +94,7 @@ def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> None:
 
 def verify_kotlin_compat(root: Path) -> None:
     """Build Kotlin JAR/POM, verify bundled native lib, and run standalone JVM consumer smoke."""
-    _require_tool(_GRADLE_BIN, "kt")
+    require_tool(_GRADLE_BIN, "kt")
     kt_root = root / _PACKAGES_DIR / "polylib-kt"
     run_checked(
         [
@@ -132,7 +111,7 @@ def verify_kotlin_compat(root: Path) -> None:
     jars = sorted((kt_root / _BUILD_CMD / "libs").glob("polylib-*.jar"))
     if not jars:
         raise RuntimeError("Expected built Kotlin JAR under packages/polylib-kt/build/libs/.")
-    expected_native = f"{_jna_platform_dir()}/{_cdylib_filename()}"
+    expected_native = f"{jna_platform_dir()}/{cdylib_filename()}"
     with zipfile.ZipFile(jars[0]) as archive:
         names = set(archive.namelist())
     required = ("META-INF/MANIFEST.MF", "dev/polylib/Polylib.class", expected_native)
@@ -144,30 +123,16 @@ def verify_kotlin_compat(root: Path) -> None:
 
 
 def _ruby_bundle_env(rb_root: Path) -> dict[str, str]:
-    _require_tool(_BUNDLE_BIN, "rb")
+    require_tool(_BUNDLE_BIN, "rb")
     env = dict(os.environ)
     env["BUNDLE_PATH"] = str(rb_root / "vendor" / _BUNDLE_BIN)
     run_checked([_BUNDLE_BIN, "install", "--quiet"], rb_root, env=env)
     return env
 
 
-def _isolated_ruby_env(gem_home: Path, rb_root: Path) -> dict[str, str]:
-    iso_env = dict(os.environ)
-    iso_env["GEM_HOME"] = str(gem_home)
-    paths = [str(gem_home)]
-    vendor_ruby = rb_root / "vendor" / _BUNDLE_BIN / TARGET_RUBY
-    if vendor_ruby.is_dir():
-        # Bundler installs into `<BUNDLE_PATH>/ruby/<abi>/`, and that directory
-        # is a gem home: it holds `gems/` and `specifications/`. Each entry of
-        # GEM_PATH must be such a directory, not one of its children.
-        paths.extend(str(p) for p in sorted(vendor_ruby.iterdir()) if p.is_dir())
-    iso_env["GEM_PATH"] = os.pathsep.join(paths)
-    return iso_env
-
-
 def verify_ruby_compat(root: Path) -> None:
     """Build Ruby `.gem`, install into isolated `GEM_HOME`, and run native FFI smoke test."""
-    _require_tool(_GEM_BIN, "rb")
+    require_tool(_GEM_BIN, "rb")
     rb_root = root / _PACKAGES_DIR / "polylib-rb"
     env = _ruby_bundle_env(rb_root)
     with tempfile.TemporaryDirectory(prefix="polylib-rb-compat-") as tmp_str:
@@ -177,7 +142,7 @@ def verify_ruby_compat(root: Path) -> None:
         run_checked(
             [_GEM_BIN, _BUILD_CMD, "polylib.gemspec", "--output", str(gem_out)], rb_root, env=env
         )
-        iso_env = _isolated_ruby_env(gem_home, rb_root)
+        iso_env = isolated_ruby_env(gem_home, rb_root)
         install_cmd = [
             _GEM_BIN,
             "install",
@@ -229,7 +194,7 @@ def verify_swift_compat(root: Path) -> None:
         swift_root / _SWIFT_SOURCES / "PolylibFFI" / "PolylibFFI.swift",
         inc_dir / "PolylibFFIInternal.h",
         inc_dir / "module.modulemap",
-        swift_root / ".native" / _cdylib_filename(),
+        swift_root / ".native" / cdylib_filename(),
     )
     missing = [str(p.relative_to(swift_root)) for p in required if not p.is_file()]
     if missing:
