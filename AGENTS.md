@@ -54,4 +54,4 @@ pixi run -e ffi tools run ffi tox
 
 ## Agent skills
 
-Installed skills live under `.agents/skills/` (pinned by `skills-lock.json`), including the generated [`project-tools` skill](.agents/skills/project-tools/SKILL.md) and the custom [`tasknest` authoring skill](.agents/skills/tasknest/SKILL.md).
+Installed skills live under `.agents/skills/` (pinned by `skills-lock.json`), plus the generated [`project-tools` skill](.agents/skills/project-tools/SKILL.md). That one file carries both the task-authoring contract and the task catalog, because `tasknest skill --write` renders it from the live task graph.
