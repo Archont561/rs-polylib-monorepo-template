@@ -160,7 +160,6 @@ rules:
     select: .agents/skills
     require:
       - project-tools
-      - tasknest
       - clean-code-principles
       - bdd-scenarios
       - tdd
