@@ -16,7 +16,7 @@ _CONTENT_DIR = Path("docs/content/docs")
 def _vale_targets(ctx: ToolContext) -> list[str]:
     """Collect every prose file Vale must check, including all MDX pages."""
     content_dir = ctx.repo_root / _CONTENT_DIR
-    targets = ["README.md", "AGENTS.md"]
+    targets = ["README.md", "AGENTS.md", "CONTRIBUTING.md"]
     pages = sorted(content_dir.rglob("*.mdx"))
     targets.extend(str(path.relative_to(ctx.repo_root)) for path in pages)
     return targets
