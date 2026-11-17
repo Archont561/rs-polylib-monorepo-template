@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tasknest import ToolContext, tool
+from tasknest import ToolContext, ToolError, tool
 
 from tools._lib.coverage import MIN_COVERAGE_PERCENT
 from tools._lib.ffi import (
@@ -20,6 +20,7 @@ from tools._lib.ffi_cov import (
     test_ruby_with_coverage,
     test_swift_with_coverage,
 )
+from tools._lib.status import CheckResult, passed, publish_ready, render, skipped
 
 
 @tool(
@@ -33,22 +34,39 @@ def test_ffi(
     coverage: bool = False,
     min_coverage: float = MIN_COVERAGE_PERCENT,
 ) -> None:
-    """Execute unit tests and shared Gherkin conformance suites for UniFFI bindings."""
+    """Execute unit tests and shared Gherkin conformance suites for UniFFI bindings.
+
+    A lane whose toolchain is absent reports `skipped` with a reason. Pass
+    `require_swift` on a macOS runner, where Swift is expected, to turn that
+    skip into a failure instead of letting the job pass without running it.
+    """
     targets = resolve_ffi_targets(target)
+    results: list[CheckResult] = []
     if TARGET_KOTLIN in targets:
         if coverage:
             test_kotlin_with_coverage(ctx, min_coverage=min_coverage)
         else:
             test_kotlin(ctx)
+        results.append(passed("kotlin-test", evidence="kotlin suite ran"))
     if TARGET_SWIFT in targets:
         if coverage:
-            test_swift_with_coverage(
-                ctx, require_toolchain=require_swift, min_coverage=min_coverage
+            results.append(
+                test_swift_with_coverage(
+                    ctx, require_toolchain=require_swift, min_coverage=min_coverage
+                )
             )
         else:
-            test_swift(ctx, require_toolchain=require_swift)
+            results.append(test_swift(ctx, require_toolchain=require_swift))
+    else:
+        results.append(
+            skipped("swift-test", f"target {target!r} excludes Swift; select `swift` or `all`.")
+        )
     if TARGET_RUBY in targets:
         if coverage:
             test_ruby_with_coverage(ctx, min_coverage=min_coverage)
         else:
             test_ruby(ctx)
+        results.append(passed("ruby-test", evidence="ruby suite ran"))
+    print(render(results))
+    if not publish_ready(results):
+        raise ToolError("FFI tests did not fully pass; see the per-lane results above.")

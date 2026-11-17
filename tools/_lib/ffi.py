@@ -17,6 +17,7 @@ from tools._lib.ffi_platform import (
 from tools._lib.ffi_platform import (
     require_tool as _require_tool,
 )
+from tools._lib.status import CheckResult, failed, passed, skipped
 
 if TYPE_CHECKING:
     from tasknest import ToolContext
@@ -206,15 +207,17 @@ def _verify_swift_artifacts(swift_root: Path) -> None:
         raise ToolError(f"Missing generated Swift UniFFI files: {_COMMA_SEP.join(missing)}")
 
 
-def test_swift(ctx: ToolContext, *, require_toolchain: bool = False) -> None:
+def test_swift(ctx: ToolContext, *, require_toolchain: bool = False) -> CheckResult:
     """Verify generated SwiftPM artifacts and execute `swift test` when Swift is installed."""
     swift_root = ctx.repo_root / _PACKAGES_DIR / _SWIFT_DIR
     _verify_swift_artifacts(swift_root)
     if shutil.which(TARGET_SWIFT) is None:
-        if require_toolchain:
-            raise ToolError("`swift` toolchain not found on PATH.")
-        print(
-            "Swift artifacts verified (install Swift toolchain or run macOS CI for `swift test`)."
+        reason = (
+            "`swift` not found on PATH, so `swift test` did not run; install the Swift "
+            "toolchain or run on macOS CI."
         )
-        return
+        if require_toolchain:
+            return failed("swift-test", reason)
+        return skipped("swift-test", reason)
     ctx.run([TARGET_SWIFT, _TEST_CMD], cwd=swift_root)
+    return passed("swift-test", evidence="swift test passed")

@@ -99,7 +99,7 @@ Run package.json script &#39;typecheck&#39; in packages/config.
 ### `pixi run tools run coverage` (`coverage`)
 Audit `coverage/&lt;lang&gt;/` reports against the per-language 90% line threshold.
 - Marks: ci
-- Options: --lang &lt;str&gt;, --min-coverage &lt;float&gt;, --require-all &lt;bool&gt;
+- Options: --lang &lt;str&gt;, --min-coverage &lt;float&gt;, --require-all &lt;bool&gt;, --skipped-langs &lt;str&gt;
 
 ### `pixi run tools run docs build` (`docs.build`)
 Run package.json script &#39;build&#39; in docs.
@@ -144,7 +144,7 @@ Build `polylib-ffi` and UniFFI bindings (`all`, `kotlin`, `swift`, `ruby`).
 ### `pixi run tools run ffi compat` (`ffi.compat`)
 Verify Kotlin JAR, SwiftPM C-ABI/Swift, and isolated Ruby gem compatibility.
 - Marks: rust, ffi, compat
-- Options: --target &lt;str&gt;
+- Options: --target &lt;str&gt;, --require-toolchain &lt;bool&gt;
 
 ### `pixi run tools run ffi test` (`ffi.test`)
 Run UniFFI tests (`all`, `kotlin`, `swift`, `ruby`) with optional &gt;=90% coverage.

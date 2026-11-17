@@ -15,6 +15,14 @@ from tools._lib.ffi_platform import (
     jna_platform_dir,
     require_tool,
 )
+from tools._lib.status import (
+    CheckResult,
+    failed,
+    passed,
+    publish_ready,
+    render,
+    skipped,
+)
 from tools._lib.stdlib_proc import run_checked
 
 TARGET_ALL = "all"
@@ -78,10 +86,23 @@ int main(void) {
 """
 
 
-def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> None:
+def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> CheckResult:
+    """Run the standalone-JVM consumer smoke, or say why it could not run."""
+    name = "kotlin-standalone-jvm"
     cp_file = kt_root / _BUILD_CMD / "runtime-classpath.txt"
-    if not cp_file.is_file() or shutil.which("javac") is None or shutil.which("java") is None:
-        return
+    if not cp_file.is_file():
+        return skipped(
+            name,
+            f"{cp_file.relative_to(kt_root)} is missing; the gradle `writeRuntimeClasspath` "
+            "task did not run, so the standalone JVM consumer cannot be exercised.",
+        )
+    absent = [binary for binary in ("javac", "java") if shutil.which(binary) is None]
+    if absent:
+        return skipped(
+            name,
+            f"{_COMMA_SEP.join(absent)} not found on PATH; run via `pixi run -e kt ...` "
+            "or install a JDK to exercise the standalone JVM consumer.",
+        )
     runtime_cp = cp_file.read_text(encoding=_UTF8).strip()
     classpath = os.pathsep.join(part for part in (str(jar_path), runtime_cp) if part)
     with tempfile.TemporaryDirectory(prefix="polylib-kt-smoke-") as tmp_str:
@@ -91,11 +112,18 @@ def _verify_kotlin_standalone_jar(jar_path: Path, kt_root: Path) -> None:
         run_checked(["javac", "-cp", classpath, str(java_file)], tmp_dir)
         run_cp = os.pathsep.join((str(tmp_dir), classpath))
         run_checked(["java", "-cp", run_cp, "SmokeTest"], tmp_dir)
+    return passed(name, evidence="javac compiled and java ran the standalone consumer")
 
 
-def verify_kotlin_compat(root: Path) -> None:
-    """Build Kotlin JAR/POM, verify bundled native lib, and run standalone JVM consumer smoke."""
-    require_tool(_GRADLE_BIN, "kt")
+def verify_kotlin_compat(root: Path, *, require_toolchain: bool = False) -> list[CheckResult]:
+    """Build the Kotlin JAR, verify its payload, and smoke the standalone JVM consumer."""
+    if shutil.which(_GRADLE_BIN) is None:
+        reason = (
+            f"`{_GRADLE_BIN}` not found on PATH; run via `pixi run -e kt ...` to build the JAR."
+        )
+        if require_toolchain:
+            return [failed("kotlin", reason)]
+        return [skipped("kotlin", reason)]
     kt_root = root / _PACKAGES_DIR / "polylib-kt"
     run_checked(
         [
@@ -119,8 +147,11 @@ def verify_kotlin_compat(root: Path) -> None:
     missing = [item for item in required if item not in names]
     if missing:
         raise RuntimeError(f"Built Kotlin JAR missing expected entries: {_COMMA_SEP.join(missing)}")
-    _verify_kotlin_standalone_jar(jars[0], kt_root)
-    print(f"Kotlin JAR compatibility OK: {jars[0].name} ({len(names)} entries + standalone JVM)")
+    results = [
+        passed("kotlin-jar", evidence=f"{jars[0].name} carries {expected_native}"),
+        _verify_kotlin_standalone_jar(jars[0], kt_root),
+    ]
+    return results
 
 
 def _ruby_bundle_env(rb_root: Path) -> dict[str, str]:
@@ -131,9 +162,13 @@ def _ruby_bundle_env(rb_root: Path) -> dict[str, str]:
     return env
 
 
-def verify_ruby_compat(root: Path) -> None:
-    """Build Ruby `.gem`, install into isolated `GEM_HOME`, and run native FFI smoke test."""
-    require_tool(_GEM_BIN, "rb")
+def verify_ruby_compat(root: Path, *, require_toolchain: bool = False) -> list[CheckResult]:
+    """Build the `.gem`, install it isolated, and smoke the packaged native library."""
+    if shutil.which(_GEM_BIN) is None:
+        reason = f"`{_GEM_BIN}` not found on PATH; run via `pixi run -e rb ...` to build the gem."
+        if require_toolchain:
+            return [failed("ruby", reason)]
+        return [skipped("ruby", reason)]
     rb_root = root / _PACKAGES_DIR / "polylib-rb"
     env = _ruby_bundle_env(rb_root)
     with tempfile.TemporaryDirectory(prefix="polylib-rb-compat-") as tmp_str:
@@ -156,13 +191,41 @@ def verify_ruby_compat(root: Path) -> None:
         ]
         run_checked(install_cmd, tmp_dir, env=iso_env)
         run_checked([TARGET_RUBY, "-e", _SMOKE_RUBY], tmp_dir, env=iso_env)
-    print("Ruby gem compatibility OK: isolated GEM_HOME install + native FFI smoke test passed.")
+    return [
+        passed(
+            "ruby-gem",
+            evidence=f"{gem_out.name} installed into an isolated GEM_HOME and passed the "
+            "version-parity smoke test",
+        )
+    ]
 
 
-def _verify_swift_c_abi_smoke(swift_root: Path) -> None:
+def _swift_artifacts(swift_root: Path) -> CheckResult:
+    """Check the generated Swift UniFFI files exist before anything runs."""
+    inc_dir = swift_root / _SWIFT_SOURCES / _SWIFT_INTERNAL / _SWIFT_INCLUDE
+    required = (
+        swift_root / "Package.swift",
+        swift_root / _SWIFT_SOURCES / "PolylibFFI" / "PolylibFFI.swift",
+        inc_dir / "PolylibFFIInternal.h",
+        inc_dir / "module.modulemap",
+        swift_root / ".native" / cdylib_filename(),
+    )
+    missing = [str(item.relative_to(swift_root)) for item in required if not item.is_file()]
+    if missing:
+        raise RuntimeError(f"Missing generated Swift UniFFI files: {_COMMA_SEP.join(missing)}")
+    return passed("swift-artifacts", evidence=f"{len(required)} generated files present")
+
+
+def _verify_swift_c_abi_smoke(swift_root: Path) -> CheckResult:
+    """Link and run the C-ABI smoke binary, or say which compiler is missing."""
+    name = "swift-c-abi"
     compiler = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if compiler is None:
-        return
+        return skipped(
+            name,
+            "no C compiler on PATH (looked for cc, gcc, clang), so the C-ABI headers "
+            "and UniFFI contract version were not verified; install one or run on macOS CI.",
+        )
     inc_dir = swift_root / _SWIFT_SOURCES / _SWIFT_INTERNAL / _SWIFT_INCLUDE
     lib_dir = swift_root / ".native"
     with tempfile.TemporaryDirectory(prefix="polylib-swift-cabi-") as tmp_str:
@@ -184,52 +247,64 @@ def _verify_swift_c_abi_smoke(swift_root: Path) -> None:
         ]
         run_checked(cmd, tmp_dir)
         run_checked([str(exe)], tmp_dir)
+    return passed(name, evidence=f"compiled with {compiler} and ran the contract-version smoke")
 
 
-def verify_swift_compat(root: Path) -> None:
-    """Verify SwiftPM artifacts, C-ABI link smoke, and `swift test` when Swift is installed."""
+def verify_swift_compat(root: Path, *, require_toolchain: bool = False) -> list[CheckResult]:
+    """Verify SwiftPM artifacts, the C-ABI link smoke, and `swift test` where Swift exists."""
     swift_root = root / _PACKAGES_DIR / "polylib-swift"
-    inc_dir = swift_root / _SWIFT_SOURCES / _SWIFT_INTERNAL / _SWIFT_INCLUDE
-    required = (
-        swift_root / "Package.swift",
-        swift_root / _SWIFT_SOURCES / "PolylibFFI" / "PolylibFFI.swift",
-        inc_dir / "PolylibFFIInternal.h",
-        inc_dir / "module.modulemap",
-        swift_root / ".native" / cdylib_filename(),
-    )
-    missing = [str(p.relative_to(swift_root)) for p in required if not p.is_file()]
-    if missing:
-        raise RuntimeError(f"Missing generated Swift UniFFI files: {_COMMA_SEP.join(missing)}")
+    results = [_swift_artifacts(swift_root)]
     if shutil.which(TARGET_SWIFT) is None:
-        _verify_swift_c_abi_smoke(swift_root)
-        print("SwiftPM artifact + C-ABI compatibility OK (run on Swift CI for `swift test`).")
-        return
+        reason = (
+            "`swift` not found on PATH, so `swift build`/`swift test` did not run; "
+            "install the Swift toolchain or run on macOS CI."
+        )
+        if require_toolchain:
+            results.append(failed("swift-test", reason))
+        else:
+            results.append(skipped("swift-test", reason))
+        results.append(_verify_swift_c_abi_smoke(swift_root))
+        return results
     run_checked([TARGET_SWIFT, _BUILD_CMD], swift_root)
     run_checked([TARGET_SWIFT, "test"], swift_root)
-    print("SwiftPM compatibility OK: build and conformance tests passed.")
+    results.append(passed("swift-test", evidence="swift build and swift test passed"))
+    results.append(_verify_swift_c_abi_smoke(swift_root))
+    return results
 
 
-def verify_ffi_compat(root: Path, target: str = TARGET_ALL) -> None:
+def verify_ffi_compat(
+    root: Path, target: str = TARGET_ALL, *, require_toolchain: bool = False
+) -> list[CheckResult]:
     """Run UniFFI compatibility verification for one or all FFI targets."""
     if target not in VALID_TARGETS:
         expected = _COMMA_SEP.join(VALID_TARGETS)
         raise ValueError(f"Unsupported FFI target {target!r}; expected one of: {expected}.")
+    results: list[CheckResult] = []
     if target in (TARGET_ALL, TARGET_KOTLIN):
-        verify_kotlin_compat(root)
+        results.extend(verify_kotlin_compat(root, require_toolchain=require_toolchain))
     if target in (TARGET_ALL, TARGET_SWIFT):
-        verify_swift_compat(root)
+        results.extend(verify_swift_compat(root, require_toolchain=require_toolchain))
     if target in (TARGET_ALL, TARGET_RUBY):
-        verify_ruby_compat(root)
+        results.extend(verify_ruby_compat(root, require_toolchain=require_toolchain))
+    return results
 
 
 def _main() -> int:
     parser = argparse.ArgumentParser(description="Verify UniFFI Kotlin, Ruby, and Swift compat.")
     parser.add_argument("--target", choices=VALID_TARGETS, default=TARGET_ALL)
+    parser.add_argument(
+        "--require-toolchain",
+        action="store_true",
+        help="Treat a missing toolchain as a failure rather than a skip.",
+    )
     args = parser.parse_args()
     script_path = Path(__file__).resolve()
     repo_root = script_path.parents[2]
-    verify_ffi_compat(repo_root, target=args.target)
-    return 0
+    results = verify_ffi_compat(
+        repo_root, target=args.target, require_toolchain=args.require_toolchain
+    )
+    print(render(results))
+    return 0 if publish_ready(results) else 1
 
 
 if __name__ == "__main__":

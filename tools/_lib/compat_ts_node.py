@@ -9,12 +9,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from tools._lib.program import resolve_program
+from tools._lib.status import CheckResult, failed, passed, skipped
 from tools._lib.tarball_ref import tarball_ref
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 _UTF8 = "utf-8"
+_COMMA_SEP = ", "
 _NPM = "npm"
 _NODE = "node"
 _WASM_PKG = "@polylib/polylib-wasm"
@@ -169,15 +171,20 @@ def verify_node_consumers(
     tarballs: dict[str, Path],
     *,
     require_node: bool,
-) -> bool:
+) -> CheckResult:
     """Install packed tarballs via `npm` and run native + WASM-fallback smoke tests in Node.js."""
-    if shutil.which(_NODE) is None or shutil.which(_NPM) is None:
+    name = "ts-node-consumers"
+    absent = [binary for binary in (_NODE, _NPM) if shutil.which(binary) is None]
+    if absent:
+        reason = (
+            f"{_COMMA_SEP.join(absent)} not found on PATH, so the Node.js consumer install "
+            "and smoke tests did not run; install Node.js or run via `pixi run -e js ...`."
+        )
         if require_node:
-            raise RuntimeError("`node` and `npm` are required for `--mode node` compatibility.")
-        print("ts-compat: `node`/`npm` not found on PATH; skipping Node.js consumer checks.")
-        return False
+            return failed(name, reason)
+        return skipped(name, reason)
     for case in _node_consumer_cases(tarballs):
         consumer_dir = tmp_path / case.dirname
         manifest = _node_manifest(case.name, consumer_dir, case.dependencies, case.overrides)
         _run_node_consumer(consumer_dir, manifest, case.script, case.install_args)
-    return True
+    return passed(name, evidence="npm installed each tarball and the Node.js smoke tests ran")
