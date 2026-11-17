@@ -566,10 +566,12 @@ jobs:
       - name: Verify Kotlin JAR and Ruby isolated gem compatibility
         uses: ./.github/actions/diagnose
         with:
+          # This job provisions Gradle and Ruby explicitly, so a skip here means
+          # the environment is broken rather than the toolchain being optional.
           label: "ffi compat (kotlin, ruby)"
           command: |
-            pixi run -e ffi tools run ffi compat --target kotlin
-            pixi run -e ffi tools run ffi compat --target ruby
+            pixi run -e ffi tools run ffi compat --target kotlin --require-toolchain
+            pixi run -e ffi tools run ffi compat --target ruby --require-toolchain
 
       - name: Stage Kotlin JAR + runtime classpath and Ruby gem for version matrices
         uses: ./.github/actions/diagnose
@@ -726,7 +728,7 @@ jobs:
         run: |
           pixi run -e rust tools run ffi build --target swift
           pixi run -e rust tools run ffi test --target swift --require-swift --coverage
-          pixi run -e rust tools run ffi compat --target swift
+          pixi run -e rust tools run ffi compat --target swift --require-toolchain
 
       - name: Upload Swift coverage artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
