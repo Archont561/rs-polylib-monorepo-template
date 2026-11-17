@@ -12,6 +12,9 @@ node_modules/
 
 # Compiled bindings, coverage & build outputs
 coverage/
+# pytest-cov's own database, written to the repo root by a bare `pytest --cov`.
+.coverage
+.coverage.*
 dist-artifacts/
 dist-gh-npm/
 dist-release/
