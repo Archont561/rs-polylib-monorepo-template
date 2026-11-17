@@ -2,21 +2,23 @@
 config_version = 1
 
 [discovery]
-workspaces = true
+workspaces = false
 
 [[discovery.roots]]
 path = "tools"
 namespace = ""
 project_root = "."
 
+# One glob covers every package manifest. `workspaces` stays off because it
+# would expand the same directories through `package.json`, and tasknest
+# dedupes entries by literal path, so the glob and the workspace list collide
+# on the same package and abort discovery with a duplicate-task error.
 [[discovery.manifests]]
-path = "packages/polylib-py"
-
-[[discovery.manifests]]
-path = "packages/polylib-ts"
+path = "packages/*"
 persistent_scripts = ["dev"]
 exclude_scripts = ["prepack"]
 
+# The docs site sits outside `packages/`, so it keeps its own entry.
 [[discovery.manifests]]
 path = "docs"
 persistent_scripts = ["dev"]
