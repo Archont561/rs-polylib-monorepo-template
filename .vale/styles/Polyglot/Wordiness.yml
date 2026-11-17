@@ -1,0 +1,18 @@
+---
+extends: existence
+message: "Replace '%s' with a plainer word."
+level: warning
+ignorecase: true
+link: https://learn.microsoft.com/en-us/style-guide/word-choice/use-simple-words-concise-sentences
+tokens:
+  - utilize
+  - utilises?
+  - leverages?
+  - leverag(?:ed|ing)
+  - prior to
+  - subsequent to
+  - in the event that
+  - has the ability to
+  - is able to
+  - a number of
+  - in order to

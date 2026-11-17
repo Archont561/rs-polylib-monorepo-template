@@ -121,6 +121,24 @@ rules:
     level: error
     message: "The Microsoft Vale prose preset must be synced under .vale/styles/Microsoft/ for offline linting."
 
+  - id: require-vale-inclusive-preset
+    kind: dir_contains
+    select: .vale/styles/alex
+    require:
+      - meta.json
+      - LICENSE
+      - "*.yml"
+    level: error
+    message: "The alex inclusive-language preset and its license must stay vendored under .vale/styles/alex/."
+
+  - id: require-vale-house-style
+    kind: dir_contains
+    select: .vale/styles/Polyglot
+    require:
+      - "*.yml"
+    level: error
+    message: "The house Vale style must keep at least one rule under .vale/styles/Polyglot/."
+
   - id: require-github-templates
     kind: dir_contains
     select: .github/ISSUE_TEMPLATE

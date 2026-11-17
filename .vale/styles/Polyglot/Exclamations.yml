@@ -1,0 +1,12 @@
+---
+extends: existence
+message: "Remove the exclamation mark; technical documentation stays neutral."
+level: warning
+nonword: true
+scope: sentence
+link: https://learn.microsoft.com/en-us/style-guide/punctuation/exclamation-points
+# Matches `word!` that ends a sentence. A negative character class keeps image
+# markup (`![alt]`), badges (`[![`), and operators (`!==`) out of the results,
+# and RE2-safe syntax avoids lookarounds, which Vale's engine does not support.
+raw:
+  - '[A-Za-z0-9]!(?:[ "'')\]]|$)'

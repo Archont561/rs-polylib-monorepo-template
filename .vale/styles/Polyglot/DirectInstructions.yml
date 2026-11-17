@@ -1,0 +1,8 @@
+---
+extends: existence
+message: "Address the reader in the imperative instead of '%s'."
+level: warning
+ignorecase: true
+link: https://learn.microsoft.com/en-us/style-guide/procedures-instructions/writing-step-by-step-instructions
+tokens:
+  - you (?:should|must|need to|have to|will need to)

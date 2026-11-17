@@ -1,0 +1,17 @@
+---
+extends: existence
+message: "Remove the filler word '%s'; it adds no information."
+level: warning
+ignorecase: true
+link: https://learn.microsoft.com/en-us/style-guide/word-choice/use-simple-words-concise-sentences
+tokens:
+  - simply
+  - just
+  - of course
+  - needless to say
+  - it goes without saying
+  - obviously
+  - clearly
+  - naturally
+  - easily
+  - trivial

@@ -1,0 +1,18 @@
+---
+extends: substitution
+message: "Use the canonical product name '%s' instead of '%s'."
+level: warning
+ignorecase: false
+link: https://learn.microsoft.com/en-us/style-guide/word-choice/capitalization
+action:
+  name: replace
+swap:
+  Github: GitHub
+  Pypi: PyPI
+  MacOS: macOS
+  Javascript: JavaScript
+  Typescript: TypeScript
+  Nodejs: Node.js
+  NodeJS: Node.js
+  Webassembly: WebAssembly
+  Postgres: PostgreSQL
