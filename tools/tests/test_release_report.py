@@ -149,3 +149,106 @@ def test_report_json_round_trips(tmp_path: Path) -> None:
     art.mkdir()
     payload = _build_report_payload(Path("."), _collect_artifact_records(art), ReportMetadata())
     assert json.loads(json.dumps(payload))["schema_version"] == 2
+
+
+def test_github_actions_conclusions_are_accepted() -> None:
+    """`build.yml` passes `needs.<job>.result`, whose vocabulary is GitHub's."""
+    checks = _parse_checks("build-rust=success,build-npm=success")
+    assert [item["status"] for item in checks] == ["passed", "passed"]
+
+
+def test_a_failed_github_conclusion_blocks_with_a_reason() -> None:
+    """A failed job is `failed`, and the report says what it was told."""
+    checks = _parse_checks("build-npm=failure")
+    assert checks[0]["status"] == "failed"
+    assert "failure" in checks[0]["reason"]
+
+
+def test_a_cancelled_job_is_not_a_pass() -> None:
+    """`cancelled` and `timed_out` are outcomes to report, not to ignore."""
+    for conclusion in ("cancelled", "timed_out", "action_required"):
+        checks = _parse_checks(f"build-npm={conclusion}")
+        assert checks[0]["status"] == "failed", conclusion
+
+
+def test_a_skipped_job_needs_a_reason_despite_the_shared_word() -> None:
+    """`skipped` exists in both vocabularies, so it is native and must explain itself."""
+    with pytest.raises(ToolError, match="no reason"):
+        _parse_checks("build-swift=skipped")
+    checks = _parse_checks("build-swift=skipped:Swift toolchain absent")
+    assert checks[0]["status"] == "skipped"
+    assert checks[0]["reason"] == "Swift toolchain absent"
+
+
+def test_the_build_workflow_vocabulary_parses_end_to_end(tmp_path: Path) -> None:
+    """The spec `build.yml` actually produces must parse without raising."""
+    spec = (
+        "build-rust=success,build-python-wheels=success,build-python-sdist=success,"
+        "build-npm=success,build-uniffi-kotlin-ruby=success,build-uniffi-swift=success"
+    )
+    art = tmp_path / "art"
+    art.mkdir()
+    payload = _build_report_payload(
+        Path("."), _collect_artifact_records(art), ReportMetadata(checks_spec=spec)
+    )
+    assert len(payload["checks"]) == 6
+    # No artifacts were supplied, so nothing can be published; the point here is
+    # that the spec parses and every check is a pass.
+    assert {item["status"] for item in payload["checks"]} == {"passed"}
+    assert payload["publish_ready"] is False
+
+
+def test_a_passing_report_renders_under_strict_undefined(tmp_path: Path) -> None:
+    """A passing check carries no reason; the template must not choke on that."""
+    from tools._lib.release import generate_build_report
+
+    art = tmp_path / "art"
+    art.mkdir()
+    (art / "polylib-0.1.0.crate").write_bytes(b"")
+    out = tmp_path / "out"
+    generate_build_report(Path("."), art, out, ReportMetadata(checks_spec="build-rust=success"))
+    rendered = (out / "report.md").read_text(encoding="utf-8")
+    assert "Publish-ready:" in rendered
+    assert "`build-rust`" in rendered
+    assert "| Gate | Status | Reason |" in rendered
+
+
+def test_a_blocked_report_lists_its_blockers(tmp_path: Path) -> None:
+    """When publication is blocked the report says why, not just `false`."""
+    from tools._lib.release import generate_build_report
+
+    art = tmp_path / "art"
+    art.mkdir()
+    out = tmp_path / "out"
+    generate_build_report(Path("."), art, out, ReportMetadata(checks_spec="build-npm=failure"))
+    rendered = (out / "report.md").read_text(encoding="utf-8")
+    assert "Publish-ready:** `false`" in rendered
+    assert "build-npm: failed" in rendered
+
+
+def test_the_build_workflow_run_block_succeeds(tmp_path: Path) -> None:
+    """Run the exact command `build.yml` issues, with its own vocabulary.
+
+    `build.yml` only triggers on push to `main`, so CI cannot catch a break
+    here before merge. This test is the check that would have.
+    """
+    from tools._lib.release import generate_build_report
+
+    art = tmp_path / "dist-release"
+    art.mkdir()
+    with zipfile.ZipFile(art / "polylib-0.1.0-cp310-abi3-manylinux_2_28_x86_64.whl", "w") as z:
+        z.writestr("polylib-0.1.0.dist-info/WHEEL", "")
+        z.writestr("polylib-0.1.0.dist-info/METADATA", "")
+    spec = (
+        "build-rust=success,build-python-wheels=success,build-python-sdist=success,"
+        "build-npm=success,build-uniffi-kotlin-ruby=success,build-uniffi-swift=success"
+    )
+    out = tmp_path / "dist-report"
+    generate_build_report(Path("."), art, out, ReportMetadata(checks_spec=spec))
+    payload = json.loads((out / "report.json").read_text(encoding="utf-8"))
+    assert payload["publish_ready"] is True
+    assert payload["blocking"] == []
+    assert [c["status"] for c in payload["checks"]] == ["passed"] * 6
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert "| Gate | Status | Reason |" in report
+    assert "`build-uniffi-swift`" in report
