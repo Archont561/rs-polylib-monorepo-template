@@ -54,7 +54,7 @@ Lint and format-check Markdown and MDX via rumdl.
 - Options: --fix &lt;bool&gt;
 
 ### `pixi run tools run docs prose` (`docs.prose`)
-Lint English technical prose with Vale using the Microsoft style preset.
+Lint English technical prose with Vale (Microsoft, alex, and house styles).
 - Marks: fast, ci, docs
 - Options: --sync &lt;bool&gt;
 
