@@ -11,6 +11,7 @@
       "**",
       "!.agents/skills",
       "!.vale/styles/Microsoft",
+      "!.vale/styles/alex",
       "!.github/ISSUE_TEMPLATE",
       "!.github/workflows/publish-sandbox.yml",
       "!.github/workflows/relock.yml",

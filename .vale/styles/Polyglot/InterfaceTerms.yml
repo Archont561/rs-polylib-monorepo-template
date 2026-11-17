@@ -7,9 +7,9 @@ link: https://learn.microsoft.com/en-us/style-guide/procedures-instructions/writ
 action:
   name: replace
 swap:
-  'Click on': Select
-  'click on': select
-  'log into': sign in to
-  'Log into': Sign in to
-  'e-mail': email
-  'E-mail': Email
+  "Click on": Select
+  "click on": select
+  "log into": sign in to
+  "Log into": Sign in to
+  "e-mail": email
+  "E-mail": Email
