@@ -31,6 +31,10 @@ disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 testpaths = ["packages/polylib-py/tests", "tools/tests"]
+# `tools/tests` imports `tools._lib`, so the repository root must be
+# importable. Stating it here keeps `pytest` runnable from a bare checkout
+# instead of depending on an exported PYTHONPATH.
+pythonpath = ["."]
 markers = [
   "bdd: Behavior-driven Gherkin scenarios",
   "conformance: Cross-language conformance vectors",
