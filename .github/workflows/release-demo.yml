@@ -93,10 +93,15 @@ jobs:
           sha256sum --check SHA256SUMS.txt
 
       - name: Summarize the bundle
+        env:
+          # Passing the version through `env` keeps `${{ ... }}` out of the
+          # script body, where shellcheck reads it as a malformed parameter
+          # expansion and actionlint fails the gate.
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           {
-            echo "### Demo release ${{ steps.version.outputs.version }}"
+            echo "### Demo release ${VERSION}"
             echo
             echo "These are dummy packages. They prove the release pipeline works;"
             echo "they are not published to any registry and carry no compiled code."
