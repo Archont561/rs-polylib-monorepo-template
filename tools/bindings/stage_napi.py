@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from typing import TYPE_CHECKING
 
 from tasknest import ToolContext, ToolError, tool
 
@@ -18,6 +19,9 @@ from tools._lib.napi_platforms import (
     platform_manifest,
     verify_platform_package,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _PACKAGES_DIR = "packages"
 _PKG_DIR = "polylib-js"
@@ -30,13 +34,19 @@ _UTF8 = "utf-8"
     description="Stage the per-platform npm package for one napi target (`--suffix`).",
 )
 def stage_napi_platform(ctx: ToolContext, suffix: str = "") -> None:
+    """Stage the addon for `suffix` and report where it landed."""
+    package_dir = stage_target(ctx.repo_root, suffix)
+    print(f"Staged {package_dir.relative_to(ctx.repo_root)}")
+
+
+def stage_target(repo_root: Path, suffix: str) -> Path:
     """Copy the compiled addon into `npm/<suffix>/` and write its manifest.
 
-    The caller names the target because the runner compiled only that one; the
-    suffix is validated against `napi.targets` so a typo cannot produce a
-    package npm would never install.
+    Returns the staged package directory. A task file registers exactly one
+    `@tool`, so this plain function is what the compat fixtures call: they need
+    the same layout without a `ToolContext`.
     """
-    package_root = ctx.repo_root / _PACKAGES_DIR / _PKG_DIR
+    package_root = repo_root / _PACKAGES_DIR / _PKG_DIR
     manifest_path = package_root / _MANIFEST
     targets = {target.suffix: target for target in load_targets(manifest_path)}
     if not suffix:
@@ -46,10 +56,23 @@ def stage_napi_platform(ctx: ToolContext, suffix: str = "") -> None:
         raise ToolError(
             f"Unknown suffix {suffix!r}; expected one of: {', '.join(sorted(targets))}."
         )
-    source = package_root / f"polylib.{suffix}.node"
-    if not source.is_file():
+    source = next(
+        (
+            candidate
+            for candidate in (
+                package_root / f"polylib.{suffix}.node",
+                # `napi build --output-dir` puts the generated loader and the
+                # addon beside each other instead of in the package root.
+                package_root / "src" / "native" / f"polylib.{suffix}.node",
+                package_root / "npm" / suffix / f"polylib.{suffix}.node",
+            )
+            if candidate.is_file()
+        ),
+        None,
+    )
+    if source is None:
         raise ToolError(
-            f"Missing compiled addon at {source.relative_to(ctx.repo_root)}; "
+            f"No polylib.{suffix}.node under {package_root.relative_to(repo_root)}; "
             "run `napi build --platform` for this target first."
         )
     package_dir = package_root / "npm" / suffix
@@ -62,4 +85,4 @@ def stage_napi_platform(ctx: ToolContext, suffix: str = "") -> None:
     problems = verify_platform_package(package_dir)
     if problems:
         raise ToolError("The staged package does not match its target:\n  " + "\n  ".join(problems))
-    print(f"Staged {target.package_name}@{version} in {package_dir.relative_to(ctx.repo_root)}")
+    return package_dir

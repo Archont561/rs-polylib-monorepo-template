@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@archont561/bun-test-utils";
 import fc from "fast-check";
 import {
@@ -126,7 +127,7 @@ test("the browser entry initializes from a fresh process", async () => {
   const script = `
     const browser = await import(${JSON.stringify(new URL("../src/index.browser.ts", import.meta.url).href)});
     const { readFileSync } = await import("node:fs");
-    const bytes = readFileSync(${JSON.stringify(new URL("../src/wasm/polylib_wasm_bg.wasm", import.meta.url).pathname)});
+    const bytes = readFileSync(${JSON.stringify(fileURLToPath(new URL("../src/wasm/polylib_wasm_bg.wasm", import.meta.url)))});
     await browser.initWasmAsync(bytes);
     const slug = browser.normalizeSlug("Fresh Process!");
     await browser.initWasmAsync();
