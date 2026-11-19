@@ -160,6 +160,45 @@ jobs:
           path: dist-artifacts/npm/*.tgz
           if-no-files-found: error
 
+  build-napi-platforms:
+    name: Build NAPI addon (${{ matrix.suffix }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { suffix: linux-x64-gnu, runner: ubuntu-latest, container: "", target: x86_64-unknown-linux-gnu }
+          - { suffix: linux-arm64-gnu, runner: ubuntu-24.04-arm, container: "", target: aarch64-unknown-linux-gnu }
+          - { suffix: linux-x64-musl, runner: ubuntu-latest, container: "node:22-alpine", target: x86_64-unknown-linux-musl }
+          - { suffix: linux-arm64-musl, runner: ubuntu-24.04-arm, container: "node:22-alpine", target: aarch64-unknown-linux-musl }
+          - { suffix: darwin-x64, runner: macos-13, container: "", target: x86_64-apple-darwin }
+          - { suffix: darwin-arm64, runner: macos-15, container: "", target: aarch64-apple-darwin }
+          - { suffix: win32-x64-msvc, runner: windows-latest, container: "", target: x86_64-pc-windows-msvc }
+          - { suffix: win32-arm64-msvc, runner: windows-11-arm, container: "", target: aarch64-pc-windows-msvc }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compile the addon for ${{ matrix.suffix }}
+        uses: ./.github/actions/setup-bindings
+        with:
+          cache-key: build-napi-${{ matrix.suffix }}
+          napi-target: ${{ matrix.target }}
+          container: ${{ matrix.container }}
+
+      - name: Stage the per-platform package
+        run: pixi run -e full tools run bindings stage_napi --suffix ${{ matrix.suffix }}
+
+      - name: Upload the per-platform package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: napi-${{ matrix.suffix }}
+          path: dist-artifacts/napi/${{ matrix.suffix }}/*.tgz
+          if-no-files-found: error
+
   build-uniffi-kotlin-ruby:
     name: Build & Pack UniFFI Kotlin JAR & Ruby Gem
     runs-on: ubuntu-latest

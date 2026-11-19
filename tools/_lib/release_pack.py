@@ -30,6 +30,7 @@ _TARGET_NPM = "npm"
 _TARGET_KOTLIN = "kotlin"
 _TARGET_RUBY = "ruby"
 _TARGET_SWIFT = "swift"
+_PLATFORMS_FILE = "napi-platforms.json"
 VALID_PACK_TARGETS: tuple[str, ...] = (
     _TARGET_ALL,
     _TARGET_RUST,
@@ -70,6 +71,31 @@ def _pack_npm(ctx: ToolContext, out_dir: Path) -> None:
             ["bun", "pm", "pack", "--cwd", f"{_PACKAGES_DIR}/{pkg}", "--destination", str(npm_out)],
             cwd=ctx.repo_root,
         )
+    _pack_napi_platforms(ctx, npm_out)
+
+
+def _pack_napi_platforms(ctx: ToolContext, npm_out: Path) -> None:
+    """Pack one tarball per target and record which ones this release has.
+
+    The main `@polylib/polylib-js` manifest lists every platform package in
+    `optionalDependencies`, but a release only has the tarballs the matrix
+    built. Writing the list next to the tarballs lets the publish step upload
+    the platform packages first, then the package that depends on them, and it
+    makes a missing target visible before anything is published.
+    """
+    npm_dir = ctx.repo_root / _PACKAGES_DIR / "polylib-js" / "npm"
+    if not npm_dir.is_dir():
+        print("No per-platform packages staged; packing the main packages only.")
+        return
+    staged = sorted(path for path in npm_dir.iterdir() if (path / "package.json").is_file())
+    for package_dir in staged:
+        ctx.run(
+            ["bun", "pm", "pack", "--cwd", str(package_dir), "--destination", str(npm_out)],
+            cwd=ctx.repo_root,
+        )
+    names = [package_dir.name for package_dir in staged]
+    (npm_out / _PLATFORMS_FILE).write_text(json.dumps(names, indent=2) + "\n", encoding="utf-8")
+    print(f"Packed {len(names)} per-platform package(s): {', '.join(names)}")
 
 
 def _pack_kotlin(ctx: ToolContext, out_dir: Path) -> None:
