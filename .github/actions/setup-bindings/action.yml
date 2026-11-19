@@ -10,10 +10,10 @@ inputs:
     description: "Compile only this Rust target for the NAPI-RS addon, instead of the host's default."
     required: false
     default: ""
-  rustup-toolchain:
-    description: "Install the target's std with rustup, for targets the Pixi Rust cannot build."
+  cross-mode:
+    description: "How to build a target the Pixi Rust cannot: `rustup` or `musl`. Empty uses Pixi."
     required: false
-    default: "false"
+    default: ""
 
 runs:
   using: "composite"
@@ -26,7 +26,7 @@ runs:
         cache-key: ${{ inputs.cache-key }}
 
     - name: Build PyO3, wasm-bindgen, and NAPI-RS artifacts
-      if: inputs.napi-target == ''
+      if: inputs.napi-target == '' && inputs.cross-mode == ''
       shell: bash
       run: pixi run -e full tools run bindings build
 
@@ -34,7 +34,7 @@ runs:
     # the whole set, which is what the shared job wants and what this one must
     # not do: it would build eight targets that cannot run on this host.
     - name: Compile the NAPI-RS addon for one target
-      if: inputs.napi-target != '' && inputs.rustup-toolchain != 'true'
+      if: inputs.napi-target != '' && inputs.cross-mode == ''
       shell: bash
       env:
         NAPI_TARGET: ${{ inputs.napi-target }}
@@ -42,13 +42,14 @@ runs:
         pixi run -e full cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
         pixi run -e full tools run bindings build --target ts
 
-    # Two targets cannot use the Pixi Rust: conda-forge publishes no `rust-std`
-    # for musl or for Windows on arm64, so the locked toolchain only ever has
-    # the host's own std and `cargo build --target` fails. Those get a rustup
-    # toolchain instead, at the version pinned in `pixi.toml` so it cannot drift
-    # from the compiler the lockfile was resolved against.
+    # Windows on arm64 needs a rustup toolchain rather than the Pixi one: Pixi
+    # has no `win-arm64` platform, so its locked Rust is the x64 build and has
+    # only the x64 std. The x64 image ships the ARM64 MSVC tools and MSVC
+    # cross-links its own architectures, so the build itself needs no linker
+    # override. The version comes from `pixi.toml` so it cannot drift from the
+    # compiler the lockfile was resolved against.
     - name: Read the pinned Rust toolchain
-      if: inputs.rustup-toolchain == 'true'
+      if: inputs.cross-mode != ''
       id: rust-pin
       shell: bash
       run: |
@@ -59,66 +60,85 @@ runs:
         echo "Pinned Rust toolchain: $toolchain"
 
     - name: Install the pinned toolchain and the target's std
-      if: inputs.rustup-toolchain == 'true'
+      if: inputs.cross-mode == 'rustup'
       uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
       with:
         toolchain: ${{ steps.rust-pin.outputs.toolchain }}
         targets: ${{ inputs.napi-target }}
 
-    # A musl target links musl's C library statically by default, and a static
-    # C library cannot go into a shared object at all: cargo rejects the build
-    # outright rather than producing something unloadable. `musl-tools` supplies
-    # a linking driver and the dynamic musl that `-crt-static` off needs. The
-    # runner's architecture already matches its target, so this is a normal
-    # build against a different C library, not a cross-architecture one.
-    - name: Install the musl linker
-      if: inputs.rustup-toolchain == 'true' && contains(inputs.napi-target, 'musl')
-      shell: bash
-      run: |
-        set -euo pipefail
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends musl-tools
-        musl-gcc --version
-
     - name: Compile the NAPI-RS addon with a rustup toolchain
-      if: inputs.napi-target != '' && inputs.rustup-toolchain == 'true'
+      if: inputs.cross-mode == 'rustup'
       shell: bash
       env:
         NAPI_TARGET: ${{ inputs.napi-target }}
       run: |
         set -euo pipefail
-        if printf '%s' "$NAPI_TARGET" | grep -q musl; then
-          # `-crt-static` has to be in `RUSTFLAGS` rather than a command-line
-          # flag: cargo asks rustc which crate types the target supports before
-          # building, and only the environment variable reaches that probe.
-          export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static"
-          upper=$(printf '%s' "$NAPI_TARGET" | tr 'a-z-' 'A-Z_')
-          export "CARGO_TARGET_${upper}_LINKER=musl-gcc"
-        fi
         # Prove the toolchain before compiling, so a missing target names itself
         # instead of surfacing as an opaque cargo exit code later.
         cargo --version
-        rustc --version
         rustup target list --installed | grep -qx "$NAPI_TARGET" \
           || { echo "rustup has no std installed for $NAPI_TARGET"; exit 1; }
-        # A failing cargo reports the reason on its last lines, and this job's
-        # log is only readable from outside the workflow. Promote them to
+        # A failing cargo reports the reason in its last lines, and this job's
+        # log is not readable from outside the workflow. Promote them to
         # annotations, which the checks API reports as soon as the step fails.
-        # `PIPESTATUS` is what makes the exit status survive the `tee`, and the
-        # status alone separates a linker error from a process that was killed.
+        # `PIPESTATUS` keeps the exit status across the `tee`, and the status
+        # alone separates a linker error from a process that was killed.
         set +e
         cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked 2>&1 | tee cargo.log
         status=${PIPESTATUS[0]}
         set -e
         if [ "$status" -ne 0 ]; then
           echo "cargo build exited with status $status"
-          # Colour codes make an annotation unreadable, and the checks API
-          # keeps only the first ten per step, so send just the lines that name
-          # the failure rather than a window that might miss them.
+          # The checks API keeps ten annotations per step, so send the lines
+          # that name the failure rather than a window that might miss them.
           strip=$(sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' cargo.log)
           errors=$(printf '%s\n' "$strip" | grep -E '^(error|warning: unused|  = note)' | tail -n 6)
-          annotations=${errors:-$(printf '%s\n' "$strip" | tail -n 6)}
-          printf '%s\n' "$annotations" | while IFS= read -r line; do echo "::error::$line"; done
+          printf '%s\n' "${errors:-$(printf '%s\n' "$strip" | tail -n 6)}" \
+            | while IFS= read -r line; do echo "::error::$line"; done
           exit "$status"
         fi
+        pixi run -e full tools run bindings build --target ts
+
+    # A musl addon links against musl and, being a shared object, needs musl's
+    # `libgcc_s` unwinder. Ubuntu's `musl-gcc` supplies musl's static `libc.a`
+    # but no musl build of that unwinder, so the link dies with "cannot find
+    # libgcc_s.so.1". Alpine's GCC is musl-native and has it, so the compile
+    # runs in an Alpine container. It is a plain `docker run` rather than a
+    # job-level `container:` because GitHub runs JavaScript Actions such as
+    # `actions/checkout` inside one only on x64 runners, which is what made the
+    # arm64 musl target impossible to build at all before. The runner's own
+    # architecture matches the target, so this is a native build either way.
+    - name: Compile the NAPI-RS addon in an Alpine container
+      if: inputs.cross-mode == 'musl'
+      shell: bash
+      env:
+        NAPI_TARGET: ${{ inputs.napi-target }}
+        RUST_PIN: ${{ steps.rust-pin.outputs.toolchain }}
+      run: |
+        set -euo pipefail
+        docker run --rm \
+          -v "$GITHUB_WORKSPACE:/w" \
+          -w /w \
+          -e RUST_PIN -e NAPI_TARGET \
+          -e RUNNER_UID="$(id -u)" -e RUNNER_GID="$(id -g)" \
+          node:22-alpine \
+          sh -euxc '
+            apk add --no-cache curl gcc musl-dev make perl
+            curl -fsSL https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain "$RUST_PIN"
+            export PATH="$HOME/.cargo/bin:$PATH"
+            # A musl target links its C library statically by default, and a
+            # static C library cannot go into a shared object, so cargo refuses
+            # the cdylib outright. This flag has to be in RUSTFLAGS rather than
+            # a command-line argument: cargo asks rustc which crate types the
+            # target supports before building, and only the environment
+            # variable reaches that probe.
+            export RUSTFLAGS="-C target-feature=-crt-static"
+            cargo --version
+            rustc --version
+            cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
+            # The container runs as root; hand the build tree back so the later
+            # steps and the cache can use it.
+            chown -R "$RUNNER_UID:$RUNNER_GID" /w/target
+          '
         pixi run -e full tools run bindings build --target ts
