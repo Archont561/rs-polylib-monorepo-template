@@ -13,6 +13,7 @@ binding, and the checks that confirm the published manifests line up.
 from __future__ import annotations
 
 import json
+import platform
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -286,3 +287,59 @@ def verify_platform_packages(pkg_dir: Path, *, npm_dir: Path | None = None) -> l
         f"{suffix}: no platform package generated" for suffix in expected if suffix not in seen
     )
     return problems
+
+
+_ARCH_ALIASES: dict[str, str] = {
+    "x86_64": "x64",
+    "amd64": "x64",
+    "aarch64": "arm64",
+    "arm64": "arm64",
+}
+_PLATFORM_ALIASES: dict[str, str] = {"win32": "win32", "windows": "win32", "darwin": "darwin"}
+
+
+def _host_arch() -> str:
+    """Architecture of this interpreter, spelled the way a napi suffix is."""
+    machine = platform.machine().lower()
+    return _ARCH_ALIASES.get(machine, machine)
+
+
+def _host_os() -> str:
+    """`linux`, `darwin`, or `win32`, independent of how Python names them."""
+    system = platform.system().lower()
+    return _PLATFORM_ALIASES.get(system, system)
+
+
+def _host_suffix_for(os_name: str, arch: str, *, musl: bool) -> str:
+    """Assemble the suffix a napi target would use on this host."""
+    if os_name == "win32":
+        return f"win32-{arch}-msvc"
+    if os_name == "linux":
+        return f"linux-{arch}-{'musl' if musl else 'gnu'}"
+    return f"{os_name}-{arch}"
+
+
+def host_suffix() -> str:
+    """The napi platform suffix for the machine running the tests.
+
+    The compatibility fixtures install the addon package by name, so they need
+    to know which one this host resolves to. Detection mirrors `detectedPlatform`
+    in `packages/polylib-js/src/native.ts`: glibc versus musl is read from the
+    interpreter's own runtime rather than assumed.
+    """
+    os_name = _host_os()
+    if os_name == "linux" and _host_arch() not in {"x64", "arm64"}:
+        raise ToolError(f"No napi target for linux-{_host_arch()}; add it to PLATFORM_SUFFIXES.")
+    return _host_suffix_for(os_name, _host_arch(), musl=is_musl_host())
+
+
+def is_musl_host() -> bool:
+    """Whether this Linux host links musl instead of glibc.
+
+    `platform.libc_ver()` reports ('glibc', ...) on a glibc system and fails to
+    identify musl, which is what distinguishes an Alpine image from Debian.
+    """
+    if _host_os() != "linux":
+        return False
+    libc, _ = platform.libc_ver()
+    return libc != "glibc"

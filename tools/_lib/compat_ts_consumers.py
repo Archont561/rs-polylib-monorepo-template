@@ -55,6 +55,7 @@ class ConsumerCase:
     script_name: str = "check.mjs"
     install_args: tuple[str, ...] = ()
     needs_bundler: bool = False
+    requires_native: bool = False
 
     def manifest(self, consumer_dir: Path) -> dict[str, object]:
         """Build the consumer's `package.json` with relative tarball references."""
@@ -181,7 +182,7 @@ def consumer_cases(
         _JS_PKG: tarballs[_JS_PKG],
     }
     return (
-        ConsumerCase("server-only", server_only, _SERVER_ONLY),
+        ConsumerCase("server-only", server_only, _SERVER_ONLY, requires_native=True),
         ConsumerCase(
             "server+wasm",
             {
@@ -191,14 +192,18 @@ def consumer_cases(
                 **platform_packages,
             },
             _SERVER_PLUS_WASM,
+            requires_native=True,
         ),
-        ConsumerCase("cjs-require", server_only, _CJS_REQUIRE, script_name="check.cjs"),
+        ConsumerCase(
+            "cjs-require", server_only, _CJS_REQUIRE, script_name="check.cjs", requires_native=True
+        ),
         ConsumerCase(
             "cjs-bundle",
             server_only,
             _CJS_BUNDLE,
             script_name="entry.mjs",
             needs_bundler=True,
+            requires_native=True,
         ),
         ConsumerCase(
             # The facade depends on @polylib/polylib-js, so npm resolves it even
@@ -309,11 +314,27 @@ def _run_bundler_case(case: ConsumerCase, consumer_dir: Path) -> None:
         )
 
 
-def run_consumer_cases(cases: tuple[ConsumerCase, ...], root: Path) -> None:
-    """Install each fixture with npm and run its program."""
+def run_consumer_cases(
+    cases: tuple[ConsumerCase, ...], root: Path, *, native_addon_available: bool = True
+) -> tuple[str, ...]:
+    """Install each fixture with npm and run its program.
+
+    A fixture marked `requires_native` cannot pass without a compiled addon, so
+    when one was never built those cases are reported as skipped instead of
+    failing. Every other case still runs, which is what keeps the browser,
+    CommonJS, and missing-binding guarantees enforced on a machine without a
+    Rust toolchain.
+
+    Returns the names of the cases that were skipped.
+    """
     npm = resolve_program(_NPM)
     node = resolve_program(_NODE)
+    skipped: list[str] = []
     for case in cases:
+        if case.requires_native and not native_addon_available:
+            print(f"- {case.name}: skipped, no compiled addon for this host", flush=True)
+            skipped.append(case.name)
+            continue
         consumer_dir = root / case.name
         consumer_dir.mkdir(parents=True, exist_ok=True)
         (consumer_dir / _PACKAGE_JSON).write_text(
@@ -327,6 +348,7 @@ def run_consumer_cases(cases: tuple[ConsumerCase, ...], root: Path) -> None:
             _run_bundler_case(case, consumer_dir)
             continue
         _run((node, case.script_name), consumer_dir)
+    return tuple(skipped)
 
 
 def verify_facade_peer_declaration(facade_manifest: dict[str, object]) -> list[str]:
