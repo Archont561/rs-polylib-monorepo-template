@@ -62,13 +62,17 @@ TRIPLE_TO_SUFFIX: dict[str, str] = {
 _RUNNER_FOR_SUFFIX: dict[str, str] = {
     "linux-x64-gnu": "ubuntu-latest",
     "linux-arm64-gnu": "ubuntu-24.04-arm",
-    "linux-x64-musl": "ubuntu-latest",  # built inside an alpine container
-    "linux-arm64-musl": "ubuntu-24.04-arm",  # built inside an alpine container
+    # musl targets link dynamically against musl-tools on the matching runner:
+    # an Alpine container cannot run `actions/checkout` on an arm64 runner.
+    "linux-x64-musl": "ubuntu-latest",
+    "linux-arm64-musl": "ubuntu-24.04-arm",
     # `macos-13` was retired; `macos-15-intel` is the current x64 macOS image.
     "darwin-x64": "macos-15-intel",
     "darwin-arm64": "macos-15",
     "win32-x64-msvc": "windows-latest",
-    "win32-arm64-msvc": "windows-11-arm",
+    # Pixi has no `win-arm64` platform, so the x64 image cross-links this one
+    # with its ARM64 MSVC tools instead of a native arm64 runner.
+    "win32-arm64-msvc": "windows-latest",
 }
 
 _MUSL_SUFFIXES = frozenset({"linux-x64-musl", "linux-arm64-musl"})

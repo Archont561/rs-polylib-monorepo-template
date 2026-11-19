@@ -171,15 +171,12 @@ jobs:
             tar xzf "$tarball" -C packages/polylib-js/npm --strip-components=1 --one-top-level
           done
           # `napi.targets` lists what the loader will try to require, and the
-          # matrix above builds all of them except `linux-arm64-musl`, which
-          # cannot be built in an Alpine container on an arm64 runner. Compare
-          # against the matrix rather than the manifest, so the count proves the
-          # artifact handoff without demanding a package the build cannot produce.
+          # matrix builds every entry, so the two must match exactly: a release
+          # that lists a package it did not publish is a broken install.
           expected=$(python3 -c 'import json;print(len(json.load(open("packages/polylib-js/package.json"))["napi"]["targets"]))')
-          buildable=$((expected - 1))
           actual=$(find packages/polylib-js/npm -name package.json | wc -l)
-          echo "staged $actual of $buildable buildable platform packages (manifest lists $expected)"
-          [ "$actual" -eq "$buildable" ] || { echo "A platform package is missing."; exit 1; }
+          echo "staged $actual of $expected platform packages"
+          [ "$actual" -eq "$expected" ] || { echo "A platform package is missing."; exit 1; }
 
       - name: Pack npm tarballs
         run: pixi run -e full tools run release pack --target npm --output-dir dist-artifacts
@@ -194,11 +191,6 @@ jobs:
   build-napi-platforms:
     name: Build NAPI addon (${{ matrix.suffix }})
     runs-on: ${{ matrix.runner }}
-    # A musl target has to be compiled in a musl userland. Passing the image name
-    # to the action as an input is not enough: without a job-level `container`,
-    # the steps still run on the glibc runner, where `apk` does not exist and the
-    # glibc-linked pixi binary cannot install a musl toolchain.
-    container: ${{ matrix.container || null }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -207,46 +199,55 @@ jobs:
           - {
               suffix: linux-x64-gnu,
               runner: ubuntu-latest,
-              container: "",
+              rustup-toolchain: "false",
               target: x86_64-unknown-linux-gnu,
             }
           - {
               suffix: linux-arm64-gnu,
               runner: ubuntu-24.04-arm,
-              container: "",
+              rustup-toolchain: "false",
               target: aarch64-unknown-linux-gnu,
             }
+          # The two musl targets use rustup rather than the Pixi Rust, because
+          # conda-forge publishes no `rust-std` for musl. They are not built in
+          # an Alpine container either: GitHub runs JavaScript Actions such as
+          # `actions/checkout` in one only on x64 runners, so the arm64 job died
+          # at checkout. `musl-tools` on the matching glibc runner links them.
           - {
               suffix: linux-x64-musl,
               runner: ubuntu-latest,
-              container: "node:22-alpine",
+              rustup-toolchain: "true",
               target: x86_64-unknown-linux-musl,
             }
-          # `linux-arm64-musl` cannot be built in an Alpine container: GitHub only
-          # supports JavaScript Actions — `actions/checkout` among them — inside an
-          # Alpine container on x64 runners, so the job fails at checkout on an
-          # arm64 runner. It is left out rather than failing every build; the
-          # release then publishes seven of the eight `optionalDependencies`, and
-          # `build-npm` checks that count against `napi.targets` below.
-          # To restore it, cross-compile on the glibc arm64 runner with
-          # `cargo build --target aarch64-unknown-linux-musl` and a musl linker.
+          - {
+              suffix: linux-arm64-musl,
+              runner: ubuntu-24.04-arm,
+              rustup-toolchain: "true",
+              target: aarch64-unknown-linux-musl,
+            }
           - {
               suffix: darwin-x64,
               runner: macos-15-intel,
-              container: "",
+              rustup-toolchain: "false",
               target: x86_64-apple-darwin,
             }
-          - { suffix: darwin-arm64, runner: macos-15, container: "", target: aarch64-apple-darwin }
+          - { suffix: darwin-arm64, runner: macos-15, rustup-toolchain: "false", target: aarch64-apple-darwin }
           - {
               suffix: win32-x64-msvc,
               runner: windows-latest,
-              container: "",
+              rustup-toolchain: "false",
               target: x86_64-pc-windows-msvc,
             }
+          # Pixi has no `win-arm64` platform, so its locked Rust is the x64
+          # build and can never produce an arm64 addon. The x64 image ships the
+          # ARM64 MSVC toolchain and MSVC cross-links its own architectures, so
+          # this builds there with a rustup toolchain that has the arm64 std.
+          # `windows-11-arm` cannot run Pixi at all, for the same missing
+          # platform reason.
           - {
               suffix: win32-arm64-msvc,
-              runner: windows-11-arm,
-              container: "",
+              runner: windows-latest,
+              rustup-toolchain: "true",
               target: aarch64-pc-windows-msvc,
             }
     steps:
@@ -260,13 +261,12 @@ jobs:
         with:
           cache-key: build-napi-${{ matrix.suffix }}
           napi-target: ${{ matrix.target }}
-          container: ${{ matrix.container }}
+          rustup-toolchain: ${{ matrix.rustup-toolchain }}
 
       # `stage_napi` assembles `packages/polylib-js/npm/<suffix>/`; a tarball is
       # what the upload and the `build-npm` job both consume, so this step packs
       # one too. `bun pm pack` is what `release pack` uses.
       - name: Stage and pack the per-platform package
-        if: matrix.container == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -275,18 +275,6 @@ jobs:
           pixi run -e full bun pm pack \
             --cwd "packages/polylib-js/npm/${{ matrix.suffix }}" \
             --destination "$PWD/dist-artifacts/napi/${{ matrix.suffix }}"
-
-      - name: Stage and pack the per-platform package (musl container)
-        if: matrix.container != ''
-        shell: sh
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          set -eux
-          mkdir -p "dist-artifacts/napi/${{ matrix.suffix }}"
-          python3 -B -m tasknest run bindings stage_napi --suffix ${{ matrix.suffix }}
-          cd "packages/polylib-js/npm/${{ matrix.suffix }}"
-          npm pack --pack-destination "$GITHUB_WORKSPACE/dist-artifacts/napi/${{ matrix.suffix }}"
 
       - name: Upload the per-platform package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
