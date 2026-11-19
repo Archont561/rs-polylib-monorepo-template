@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 from tasknest import ToolContext, ToolError, tool
@@ -78,6 +79,7 @@ def _build_js_and_py(ctx: ToolContext, target: str) -> None:
     if target in (_ALL_TARGETS, _TARGET_NAPI):
         _build_bun_package(ctx, "polylib-js", "build:native")
         _build_bun_package(ctx, "polylib-js")
+        _write_supported_targets(ctx)
     if target in (_ALL_TARGETS, _TARGET_TS):
         _build_bun_package(ctx, "polylib-ts")
 
@@ -99,3 +101,20 @@ def build_bindings(ctx: ToolContext, target: BindingsTarget = _ALL_TARGETS) -> N
         # cast, is what lets mypy narrow: a dict lookup by key yields the value
         # type, and the FFI subtargets are exactly this table's keys.
         build_ffi_targets(ctx, target=_FFI_SUBTARGET_OF[target])
+
+
+def _write_supported_targets(ctx: ToolContext) -> None:
+    """Record the platforms this build's loader can recognise.
+
+    The loader ships the list in its error message, so a consumer on an
+    unsupported host is told what is available. The list is generated from
+    `napi.targets` rather than written by hand, because a hand-written copy
+    drifts the first time a target is added.
+    """
+    from tools._lib.napi_platforms import load_targets
+
+    manifest = ctx.repo_root / _PACKAGES_DIR / "polylib-js" / "package.json"
+    suffixes = [target.suffix for target in load_targets(manifest)]
+    out = ctx.repo_root / _PACKAGES_DIR / "polylib-js" / "src" / "supported-targets.json"
+    out.write_text(json.dumps(suffixes, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {out.relative_to(ctx.repo_root)} ({len(suffixes)} targets)")
