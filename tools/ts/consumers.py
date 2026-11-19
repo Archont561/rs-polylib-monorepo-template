@@ -128,6 +128,15 @@ def ts_consumers(
     if problems:
         raise ToolError("The packed facade manifest is wrong:\n  " + "\n  ".join(problems))
     platform = _platform_tarballs(ctx.repo_root / platform_dir) if platform_dir else {}
+    if platform_dir and not platform:
+        # `--platform-dir` is passed exactly when the caller expects an addon for
+        # this host. Finding none means the artifact handoff is broken, not that
+        # the addon cases are irrelevant here, so this must not degrade into a
+        # quiet pass over the cases that need no addon.
+        raise ToolError(
+            f"No @polylib/polylib-js-* tarball in {ctx.repo_root / platform_dir}; "
+            "the per-platform package for this host was never downloaded."
+        )
     selected = _select(consumer_cases(tarballs, platform_packages=platform), cases)
     skipped = run_consumer_cases(
         selected,
