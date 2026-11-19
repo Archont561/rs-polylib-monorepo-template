@@ -199,43 +199,45 @@ jobs:
           - {
               suffix: linux-x64-gnu,
               runner: ubuntu-latest,
-              rustup-toolchain: "false",
+              cross-mode: "",
               target: x86_64-unknown-linux-gnu,
             }
           - {
               suffix: linux-arm64-gnu,
               runner: ubuntu-24.04-arm,
-              rustup-toolchain: "false",
+              cross-mode: "",
               target: aarch64-unknown-linux-gnu,
             }
-          # The two musl targets use rustup rather than the Pixi Rust, because
-          # conda-forge publishes no `rust-std` for musl. They are not built in
-          # an Alpine container either: GitHub runs JavaScript Actions such as
-          # `actions/checkout` in one only on x64 runners, so the arm64 job died
-          # at checkout. `musl-tools` on the matching glibc runner links them.
+          # A musl addon links musl's `libgcc_s` unwinder, and Ubuntu's
+          # `musl-gcc` ships no musl build of it, so the compile runs in an
+          # Alpine container where GCC is musl-native. That container is a
+          # plain `docker run`, not a job-level `container:`, because GitHub
+          # runs JavaScript Actions such as `actions/checkout` inside one only
+          # on x64 runners — which is what made the arm64 target impossible
+          # before. Each runner's own architecture matches its target.
           - {
               suffix: linux-x64-musl,
               runner: ubuntu-latest,
-              rustup-toolchain: "true",
+              cross-mode: "musl",
               target: x86_64-unknown-linux-musl,
             }
           - {
               suffix: linux-arm64-musl,
               runner: ubuntu-24.04-arm,
-              rustup-toolchain: "true",
+              cross-mode: "musl",
               target: aarch64-unknown-linux-musl,
             }
           - {
               suffix: darwin-x64,
               runner: macos-15-intel,
-              rustup-toolchain: "false",
+              cross-mode: "",
               target: x86_64-apple-darwin,
             }
-          - { suffix: darwin-arm64, runner: macos-15, rustup-toolchain: "false", target: aarch64-apple-darwin }
+          - { suffix: darwin-arm64, runner: macos-15, cross-mode: "", target: aarch64-apple-darwin }
           - {
               suffix: win32-x64-msvc,
               runner: windows-latest,
-              rustup-toolchain: "false",
+              cross-mode: "",
               target: x86_64-pc-windows-msvc,
             }
           # Pixi has no `win-arm64` platform, so its locked Rust is the x64
@@ -247,7 +249,7 @@ jobs:
           - {
               suffix: win32-arm64-msvc,
               runner: windows-latest,
-              rustup-toolchain: "true",
+              cross-mode: "rustup",
               target: aarch64-pc-windows-msvc,
             }
     steps:
@@ -261,7 +263,7 @@ jobs:
         with:
           cache-key: build-napi-${{ matrix.suffix }}
           napi-target: ${{ matrix.target }}
-          rustup-toolchain: ${{ matrix.rustup-toolchain }}
+          cross-mode: ${{ matrix.cross-mode }}
 
       # A failed compile is the one thing this workflow cannot show: the job log
       # is only reachable from inside GitHub. The compile leaves `cargo.log`
