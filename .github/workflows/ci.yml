@@ -424,10 +424,14 @@ jobs:
           # napi` task would compile all eight targets instead, seven of which
           # cannot run here.
           pixi run -e full bun run --cwd packages/polylib-js build:native
+          echo "addon files after build:"
+          ls -l "packages/polylib-js/polylib.$suffix.node" || true
+          ls -l "packages/polylib-js/src/native/polylib.$suffix.node" || true
           pixi run -e full tools run bindings stage_napi --suffix "$suffix"
           pixi run -e full bun pm pack \
             --cwd "packages/polylib-js/npm/$suffix" \
             --destination "$PWD/dist-artifacts/napi"
+          ls -l dist-artifacts/napi
 
       - name: Install tarballs and run the consumer fixtures
         shell: bash
