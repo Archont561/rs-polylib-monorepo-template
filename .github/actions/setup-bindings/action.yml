@@ -41,11 +41,15 @@ runs:
       run: |
         set -eux
         apk add --no-cache musl-dev perl make gcc g++ curl git nodejs npm python3 py3-pip
-        # `--default-toolchain 1.88` installs only the host target; a
-        # `cargo build --target` needs that target's std as well, and cargo
-        # otherwise exits 101 with a "may not be installed" note.
+        # Read the toolchain from `pixi.toml` rather than repeating it: the
+        # dependency graph is resolved against the pinned compiler, not the
+        # `rust-version` MSRV, and a copy here silently drifts. `--target`
+        # installs that target's std as well; without it `cargo build --target`
+        # exits 101.
+        toolchain=$(sed -n 's/^rust = "=\(.*\)"$/\1/p' pixi.toml)
+        [ -n "$toolchain" ] || { echo "No rust pin in pixi.toml"; exit 1; }
         curl -fsSL https://sh.rustup.rs \
-          | sh -s -- -y --profile minimal --default-toolchain 1.88 --target "$NAPI_TARGET"
+          | sh -s -- -y --profile minimal --default-toolchain "$toolchain" --target "$NAPI_TARGET"
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
         pip3 install --break-system-packages --quiet tasknest==0.4.0 jinja2
         python3 -c "import tasknest"
