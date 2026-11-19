@@ -129,6 +129,7 @@ jobs:
 
   build-npm:
     name: Build & Pack npm Packages (WASM, NAPI-RS, Facade)
+    needs: [build-napi-platforms]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -149,6 +150,30 @@ jobs:
           pixi run -e full tools run ts lint
           pixi run -e full tools run ts test
           pixi run -e full tools run ts compat
+
+      - name: Download the compiled per-platform packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: napi-*
+          path: dist-artifacts/napi
+          merge-multiple: true
+
+      - name: Stage each platform package beside the addon package
+        shell: bash
+        run: |
+          # `release pack` reads `packages/polylib-js/npm/<suffix>/`, so the
+          # downloaded tarballs are unpacked back into that layout. The main
+          # tarball's optionalDependencies name these packages, and a release
+          # that lists eight but publishes five is a broken install.
+          mkdir -p packages/polylib-js/npm
+          for tarball in dist-artifacts/napi/*.tgz; do
+            [ -e "$tarball" ] || { echo "No platform tarballs were downloaded."; exit 1; }
+            tar xzf "$tarball" -C packages/polylib-js/npm --strip-components=1 --one-top-level
+          done
+          expected=$(python3 -c 'import json;print(len(json.load(open("packages/polylib-js/package.json"))["napi"]["targets"]))')
+          actual=$(find packages/polylib-js/npm -name package.json | wc -l)
+          echo "staged $actual of $expected platform packages"
+          [ "$actual" -eq "$expected" ] || { echo "A platform package is missing."; exit 1; }
 
       - name: Pack npm tarballs
         run: pixi run -e full tools run release pack --target npm --output-dir dist-artifacts

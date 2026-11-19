@@ -129,13 +129,34 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
-          wasm_tgz=(release-bundle/artifacts-npm/polylib-polylib-wasm-*.tgz)
-          js_tgz=(release-bundle/artifacts-npm/polylib-polylib-js-*.tgz)
-          ts_tgz=(release-bundle/artifacts-npm/polylib-polylib-[0-9]*.tgz)
+          # Order matters. `@polylib/polylib-js` declares its eight platform
+          # packages as exact-version optional dependencies, so they must exist
+          # before it does. `@polylib/polylib` peers on the WebAssembly package,
+          # so that goes next, and the facade last. A missing platform package
+          # fails the release rather than being skipped.
+          npm_dir=release-bundle/artifacts-npm
+          platforms=()
+          for tarball in "$npm_dir"/polylib-polylib-js-*-*-*.tgz; do
+            [ -e "$tarball" ] || continue
+            platforms+=("$tarball")
+          done
+          expected=$(jq -r 'length' "$npm_dir/napi-platforms.json" 2>/dev/null || echo 0)
+          echo "Publishing ${#platforms[@]} platform package(s); the release lists ${expected}."
+          if [ "${#platforms[@]}" -ne "${expected}" ]; then
+            echo "The release lists ${expected} platform packages but only ${#platforms[@]} were packed."
+            exit 1
+          fi
           flags=(--access public --provenance)
           if [ "$DRY_RUN" = "true" ]; then
             flags+=(--dry-run)
           fi
+          for tarball in "${platforms[@]}"; do
+            echo "publishing $tarball"
+            npm publish "${flags[@]}" "$tarball"
+          done
+          wasm_tgz=(release-bundle/artifacts-npm/polylib-polylib-wasm-*.tgz)
+          js_tgz=(release-bundle/artifacts-npm/polylib-polylib-js-[0-9]*.tgz)
+          ts_tgz=(release-bundle/artifacts-npm/polylib-polylib-[0-9]*.tgz)
           npm publish "${flags[@]}" "${wasm_tgz[0]}"
           npm publish "${flags[@]}" "${js_tgz[0]}"
           npm publish "${flags[@]}" "${ts_tgz[0]}"
@@ -261,13 +282,20 @@ jobs:
             --owner "$GH_OWNER" \
             --input-dir release-bundle/artifacts-npm \
             --output-dir dist-gh-npm
-          wasm_tgz=(dist-gh-npm/*-polylib-wasm-*.tgz)
-          js_tgz=(dist-gh-npm/*-polylib-js-*.tgz)
-          ts_tgz=(dist-gh-npm/*-polylib-[0-9]*.tgz)
+          # Same ordering as npmjs: the platform packages a package depends on
+          # must exist before the package that names them.
+          platforms=(dist-gh-npm/*-polylib-js-*-*-*.tgz)
           flags=(--registry https://npm.pkg.github.com)
           if [ "$DRY_RUN" = "true" ]; then
             flags+=(--dry-run)
           fi
+          for tarball in "${platforms[@]}"; do
+            [ -e "$tarball" ] || continue
+            npm publish "${flags[@]}" "$tarball"
+          done
+          wasm_tgz=(dist-gh-npm/*-polylib-wasm-*.tgz)
+          js_tgz=(dist-gh-npm/*-polylib-js-[0-9]*.tgz)
+          ts_tgz=(dist-gh-npm/*-polylib-[0-9]*.tgz)
           npm publish "${flags[@]}" "${wasm_tgz[0]}"
           npm publish "${flags[@]}" "${js_tgz[0]}"
           npm publish "${flags[@]}" "${ts_tgz[0]}"

@@ -55,7 +55,7 @@ not restate either.
 
 | Group | Tasks |
 | :--- | ---: |
-| `bindings` | 1 |
+| `bindings` | 2 |
 | `check` | 1 |
 | `compat` | 1 |
 | `config` | 1 |
@@ -73,7 +73,7 @@ not restate either.
 | `security` | 4 |
 | `test` | 1 |
 | `tox` | 1 |
-| `ts` | 4 |
+| `ts` | 5 |
 
 
 ## Tasks
@@ -82,6 +82,11 @@ not restate either.
 Build bindings (`all`, `py`, `wasm`, `napi`, `ts`, `ffi`, `kotlin|swift|ruby`).
 - Marks: rust, python, ts, ffi, writes
 - Options: --target &lt;&#39;all&#39;|&#39;py&#39;|&#39;wasm&#39;|&#39;napi&#39;|&#39;ts&#39;|&#39;ffi&#39;|&#39;kotlin&#39;|&#39;swift&#39;|&#39;ruby&#39;&gt;
+
+### `pixi run tools run bindings stage_napi` (`bindings.stage_napi`)
+Stage the per-platform npm package for one napi target (`--suffix`).
+- Marks: rust, ts, writes
+- Options: --suffix &lt;str&gt;
 
 ### `pixi run tools run check` (`check`)
 Run all offline repository policy, docs, formatting, and lint checks.
@@ -346,6 +351,11 @@ Run `tox` compatibility suites (`compat`, `python`, `npm`, `rust`, `ffi`, `all`)
 Pack npm tarballs and verify `publint`, `attw`, Bun, Node.js, and `tsc`.
 - Marks: ci, ts, compat
 - Options: --mode &lt;&#39;all&#39;|&#39;pack&#39;|&#39;bun&#39;|&#39;node&#39;|&#39;types&#39;&gt;
+
+### `pixi run tools run ts consumers` (`ts.consumers`)
+Run the published-tarball consumer fixtures (`--tarball-dir`, `--platform-dir`).
+- Marks: ts, ci
+- Options: --tarball-dir &lt;str&gt;, --platform-dir &lt;str&gt;, --cases &lt;&#39;all&#39;|&#39;native&#39;&gt;
 
 ### `pixi run tools run ts lint` (`ts.lint`)
 Run Biome checks and TypeScript strict type-checking.
