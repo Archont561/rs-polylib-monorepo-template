@@ -816,6 +816,7 @@ jobs:
       - polyglot-bindings
       - python-versions
       - node-versions
+      - node-musl
       - bun-versions
       - uniffi-kotlin-ruby
       - java-versions
