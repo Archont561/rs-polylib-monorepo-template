@@ -407,6 +407,11 @@ jobs:
             echo "Using the published $suffix package."
             exit 0
           fi
+          # The downloaded artifacts also carry the x64 package, because that is
+          # the one `polyglot-bindings` publishes. Leaving it in place would let
+          # the fixture runner install an addon this host cannot load, so the
+          # directory is reduced to this host's package alone.
+          find dist-artifacts/napi -name 'polylib-polylib-js-*.tgz' -delete
           echo "No $suffix package published; compiling it for this runner."
           # `napi` is a workspace dependency, and this job skips the workspace
           # install because the fixtures bring their own. The build needs it, so

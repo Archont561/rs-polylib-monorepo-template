@@ -21,6 +21,7 @@ from tools._lib.compat_ts_consumers import (
     run_consumer_cases,
     verify_facade_peer_declaration,
 )
+from tools._lib.napi_platforms import host_suffix
 from tools._lib.status import CheckResult, not_run, passed
 from tools._lib.verification import reports_verification
 
@@ -137,6 +138,15 @@ def ts_consumers(
             f"No @polylib/polylib-js-* tarball in {ctx.repo_root / platform_dir}; "
             "the per-platform package for this host was never downloaded."
         )
+    if platform:
+        print(f"Addon package(s) available: {', '.join(sorted(platform))}", flush=True)
+        # The matrices download every `napi-*` artifact that exists, and on a pull
+        # request only the x64 one does. Installing another host's addon cannot
+        # work — the loader resolves by package name — so an entry whose own
+        # package is absent has to say so instead of failing inside npm.
+        expected = f"{_JS_PKG}-{host_suffix()}"
+        if expected not in platform:
+            print(f"note: {expected} is not among them", flush=True)
     selected = _select(consumer_cases(tarballs, platform_packages=platform), cases)
     skipped = run_consumer_cases(
         selected,
