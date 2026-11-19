@@ -168,7 +168,16 @@ jobs:
           mkdir -p packages/polylib-js/npm
           for tarball in dist-artifacts/napi/*.tgz; do
             [ -e "$tarball" ] || { echo "No platform tarballs were downloaded."; exit 1; }
-            tar xzf "$tarball" -C packages/polylib-js/npm --strip-components=1 --one-top-level
+            # Every per-platform package is named `@polylib/polylib-js-<suffix>`,
+            # so the published name is what says which directory this belongs
+            # in. `--one-top-level` names it after the tarball instead, so the
+            # layout `release pack` reads would never appear.
+            suffix=$(tar xzOf "$tarball" package/package.json \
+              | python3 -c 'import json,sys;print(json.load(sys.stdin)["name"].removeprefix("@polylib/polylib-js-"))')
+            echo "unpacking $(basename "$tarball") as $suffix"
+            rm -rf "packages/polylib-js/npm/$suffix"
+            mkdir -p "packages/polylib-js/npm/$suffix"
+            tar xzf "$tarball" -C "packages/polylib-js/npm/$suffix" --strip-components=1
           done
           # `napi.targets` lists what the loader will try to require, and the
           # matrix builds every entry, so the two must match exactly: a release
