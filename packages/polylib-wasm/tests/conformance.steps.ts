@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
 import { withState } from "@aboviq/bun-test-cucumber";
-import { normalizeSlug, PolylibError, type ScoreSummary, summarizeScores } from "@/src/index.js";
+import { normalizeSlug, PolylibError, type ScoreSummary, summarizeScores } from "@/src/index.node.js";
 
 interface ConformanceState {
   rawInput?: string | undefined;

@@ -54,19 +54,23 @@
       "name": "@polylib/polylib",
       "version": "0.1.0",
       "dependencies": {
-        "@polylib/polylib-wasm": "workspace:*",
+        "@polylib/polylib-js": "workspace:*",
       },
       "devDependencies": {
         "@aboviq/bun-test-cucumber": "0.2.0",
         "@archont561/bun-test-utils": "0.2.0",
         "@arethetypeswrong/cli": "0.18.5",
+        "@polylib/polylib-wasm": "workspace:*",
         "bunup": "0.16.32",
         "fast-check": "4.10.2",
         "publint": "0.3.25",
       },
-      "optionalDependencies": {
-        "@polylib/polylib-js": "workspace:*",
+      "peerDependencies": {
+        "@polylib/polylib-wasm": "workspace:~",
       },
+      "optionalPeers": [
+        "@polylib/polylib-wasm",
+      ],
     },
     "packages/polylib-wasm": {
       "name": "@polylib/polylib-wasm",

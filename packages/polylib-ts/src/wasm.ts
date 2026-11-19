@@ -1,6 +1,7 @@
 import {
   getWasmVersion,
   initWasm,
+  initWasmAsync,
   normalizeSlug as rawNormalizeSlug,
   summarizeScores as rawSummarizeScores,
 } from "@polylib/polylib-wasm";
@@ -12,7 +13,7 @@ const engine = createEngine("wasm", getWasmVersion, rawNormalizeSlug, rawSummari
 export const VERSION: string = version;
 export const BACKEND: BackendKind = "wasm";
 
-export { type BackendKind, initWasm, PolylibError, type ScoreSummary };
+export { type BackendKind, initWasm, initWasmAsync, PolylibError, type ScoreSummary };
 
 /** Return the version embedded in the compiled WebAssembly module. */
 export function getEngineVersion(): string {

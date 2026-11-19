@@ -1,7 +1,7 @@
 import { defineConfig } from "bunup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/browser.ts", "src/native.ts", "src/wasm.ts"],
+  entry: ["src/index.ts", "src/not-in-browser.ts", "src/wasm.ts"],
   format: ["esm"],
   dts: true,
   clean: true,

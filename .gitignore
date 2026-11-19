@@ -51,3 +51,7 @@ packages/polylib-rb/lib/polylib/native/
 .env.*
 .DS_Store
 *.log
+# Local stand-ins for cargo-produced binding artifacts (never committed).
+packages/polylib-wasm/src/wasm/polylib_wasm*.js
+packages/polylib-wasm/src/wasm/polylib_wasm*.d.ts
+packages/polylib-js/src/native/binding.cjs

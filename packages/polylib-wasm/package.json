@@ -20,9 +20,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "node": "./dist/index.node.js",
+      "bun": "./dist/index.node.js",
+      "browser": "./dist/index.browser.js",
+      "worker": "./dist/index.browser.js",
+      "default": "./dist/index.browser.js"
     },
+    "./polylib_wasm_bg.wasm": "./dist/polylib_wasm_bg.wasm",
     "./package.json": "./package.json"
   },
   "files": [

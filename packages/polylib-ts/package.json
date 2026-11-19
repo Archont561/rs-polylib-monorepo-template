@@ -4,7 +4,7 @@
   "private": false,
   "license": "MIT",
   "type": "module",
-  "description": "Unified TypeScript facade for polylib-core (auto-selects native NAPI-RS with WASM fallback).",
+  "description": "Unified TypeScript facade for polylib-core (native NAPI-RS entry, optional WebAssembly subpath).",
   "homepage": "https://github.com/your-org/polyglot-lib-template#readme",
   "repository": {
     "type": "git",
@@ -20,20 +20,12 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "browser": "./dist/browser.js",
-      "worker": "./dist/browser.js",
-      "edge-light": "./dist/browser.js",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
-    "./native": {
-      "types": "./dist/native.d.ts",
-      "import": "./dist/native.js",
-      "default": "./dist/native.js"
+      "node": "./dist/index.js",
+      "bun": "./dist/index.js",
+      "default": "./dist/not-in-browser.js"
     },
     "./wasm": {
       "types": "./dist/wasm.d.ts",
-      "import": "./dist/wasm.js",
       "default": "./dist/wasm.js"
     },
     "./package.json": "./package.json"
@@ -59,18 +51,24 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
-  "dependencies": {
-    "@polylib/polylib-wasm": "workspace:*"
-  },
-  "optionalDependencies": {
-    "@polylib/polylib-js": "workspace:*"
-  },
   "devDependencies": {
     "@aboviq/bun-test-cucumber": "0.2.0",
     "@archont561/bun-test-utils": "0.2.0",
     "@arethetypeswrong/cli": "0.18.5",
     "bunup": "0.16.32",
     "fast-check": "4.10.2",
-    "publint": "0.3.25"
+    "publint": "0.3.25",
+    "@polylib/polylib-wasm": "workspace:*"
+  },
+  "dependencies": {
+    "@polylib/polylib-js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@polylib/polylib-wasm": "workspace:~"
+  },
+  "peerDependenciesMeta": {
+    "@polylib/polylib-wasm": {
+      "optional": true
+    }
   }
 }
