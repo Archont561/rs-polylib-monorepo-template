@@ -473,6 +473,15 @@ jobs:
           path: dist-artifacts/napi
           merge-multiple: true
 
+      # The fixtures are installed with npm and then run under `--runner bun`;
+      # the pixi `full` environment carries Bun but no Node.js, so npm has to
+      # come from the runner. Without this the harness dies in `npm install`
+      # before it reaches the Bun process this job exists to exercise.
+      - name: Setup Node.js for the npm that installs the fixtures
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
       # Bun is what runs the consumer process here, which is the point of this
       # job: the same fixtures `ts compat` uses, on each supported Bun version.
       - name: Run the consumer fixtures under Bun

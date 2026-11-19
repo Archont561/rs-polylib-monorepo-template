@@ -10,6 +10,7 @@ optional platform package that held the addon.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -354,8 +355,25 @@ def run_consumer_cases(
         # `runner` overrides every case's own interpreter, which is how the Bun
         # matrix runs the identical fixtures under a different runtime. A
         # `.cjs` program is still valid input; Bun and Node both read it.
-        _run((resolve_program(runner or case.runner), case.script_name), consumer_dir)
+        _run((_require_program(runner or case.runner), case.script_name), consumer_dir)
     return tuple(skipped)
+
+
+def _require_program(name: str) -> str:
+    """Resolve `name`, failing with the reason rather than `FileNotFoundError`.
+
+    Every case installs with npm before it runs, and the Bun matrix runs the same
+    fixtures through Bun, so a missing interpreter here means the job set up a
+    runtime but not the one that installs the fixtures. Saying so is more useful
+    than the spawn error `subprocess` raises for a bare name.
+    """
+    resolved = shutil.which(name)
+    if resolved is None:
+        raise ToolError(
+            f"{name} is not on PATH; the fixtures are installed with npm and then "
+            "run under the requested runner, so both must be available."
+        )
+    return resolved
 
 
 def verify_facade_peer_declaration(facade_manifest: dict[str, object]) -> list[str]:
