@@ -188,7 +188,15 @@ jobs:
           [ "$actual" -eq "$expected" ] || { echo "A platform package is missing."; exit 1; }
 
       - name: Pack npm tarballs
-        run: pixi run -e full tools run release pack --target npm --output-dir dist-artifacts
+        run: |
+          pixi run -e full tools run release pack --target npm --output-dir dist-artifacts
+          # One tarball for the addon package and one per platform package. The
+          # count above proves the downloaded set was complete; this proves the
+          # pack actually emitted all of them, which is what gets published.
+          packed=$(find dist-artifacts/npm -name '*.tgz' | wc -l)
+          expected=$(( $(python3 -c 'import json;print(len(json.load(open("packages/polylib-js/package.json"))["napi"]["targets"]))') + 1 ))
+          echo "packed $packed npm tarballs, expected $expected"
+          [ "$packed" -eq "$expected" ] || { echo "The npm pack is missing a tarball."; exit 1; }
 
       - name: Upload npm tarball artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
