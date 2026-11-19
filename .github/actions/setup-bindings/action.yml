@@ -51,8 +51,13 @@ runs:
         curl -fsSL https://sh.rustup.rs \
           | sh -s -- -y --profile minimal --default-toolchain "$toolchain" --target "$NAPI_TARGET"
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        # Prove the toolchain before the compile, so a failure names itself
+        # instead of surfacing as an opaque cargo exit code later.
+        "$HOME/.cargo/bin/cargo" --version
+        "$HOME/.cargo/bin/rustc" --version
+        "$HOME/.cargo/bin/rustup" target list --installed
         pip3 install --break-system-packages --quiet tasknest==0.4.0 jinja2
-        python3 -c "import tasknest"
+        python3 -c "import tasknest; print('tasknest ok')"
 
     - name: Build PyO3, wasm-bindgen, and NAPI-RS artifacts
       if: inputs.napi-target == '' && inputs.container == ''
@@ -81,4 +86,7 @@ runs:
         NAPI_TARGET: ${{ inputs.napi-target }}
       run: |
         set -eux
+        # `--locked` needs the registry cached or reachable; the container starts
+        # with neither, so fetch first and let the failure name itself here.
+        cargo fetch --locked
         cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
