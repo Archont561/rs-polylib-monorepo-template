@@ -170,10 +170,16 @@ jobs:
             [ -e "$tarball" ] || { echo "No platform tarballs were downloaded."; exit 1; }
             tar xzf "$tarball" -C packages/polylib-js/npm --strip-components=1 --one-top-level
           done
+          # `napi.targets` lists what the loader will try to require, and the
+          # matrix above builds all of them except `linux-arm64-musl`, which
+          # cannot be built in an Alpine container on an arm64 runner. Compare
+          # against the matrix rather than the manifest, so the count proves the
+          # artifact handoff without demanding a package the build cannot produce.
           expected=$(python3 -c 'import json;print(len(json.load(open("packages/polylib-js/package.json"))["napi"]["targets"]))')
+          buildable=$((expected - 1))
           actual=$(find packages/polylib-js/npm -name package.json | wc -l)
-          echo "staged $actual of $expected platform packages"
-          [ "$actual" -eq "$expected" ] || { echo "A platform package is missing."; exit 1; }
+          echo "staged $actual of $buildable buildable platform packages (manifest lists $expected)"
+          [ "$actual" -eq "$buildable" ] || { echo "A platform package is missing."; exit 1; }
 
       - name: Pack npm tarballs
         run: pixi run -e full tools run release pack --target npm --output-dir dist-artifacts
@@ -216,12 +222,14 @@ jobs:
               container: "node:22-alpine",
               target: x86_64-unknown-linux-musl,
             }
-          - {
-              suffix: linux-arm64-musl,
-              runner: ubuntu-24.04-arm,
-              container: "node:22-alpine",
-              target: aarch64-unknown-linux-musl,
-            }
+          # `linux-arm64-musl` cannot be built in an Alpine container: GitHub only
+          # supports JavaScript Actions — `actions/checkout` among them — inside an
+          # Alpine container on x64 runners, so the job fails at checkout on an
+          # arm64 runner. It is left out rather than failing every build; the
+          # release then publishes seven of the eight `optionalDependencies`, and
+          # `build-npm` checks that count against `napi.targets` below.
+          # To restore it, cross-compile on the glibc arm64 runner with
+          # `cargo build --target aarch64-unknown-linux-musl` and a musl linker.
           - {
               suffix: darwin-x64,
               runner: macos-15-intel,
