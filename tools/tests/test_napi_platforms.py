@@ -149,9 +149,20 @@ def test_writing_platform_packages_produces_one_directory_per_target(
 
 
 def _place_addons(root: Path) -> None:
-    """Drop a stand-in `.node` where `napi artifacts` would copy the real one."""
+    """Drop a stand-in `.node` where `napi artifacts` would copy the real one.
+
+    Each one is a valid header for its own target, because the verification reads
+    the container and architecture out of the payload.
+    """
     for target in PLATFORM_TARGETS:
-        (root / "npm" / target.suffix / f"polylib.{target.suffix}.node").write_bytes(b"\x7fELF")
+        addon = root / "npm" / target.suffix / f"polylib.{target.suffix}.node"
+        arch = target.suffix.split("-")[1]
+        if target.suffix.startswith("win32-"):
+            _write_pe(addon, arch=arch)
+        elif target.suffix.startswith("darwin-"):
+            _write_macho(addon, arch=arch)
+        else:
+            _write_elf(addon, arch="aarch64" if arch == "arm64" else "x86_64")
 
 
 def test_a_written_set_verifies_clean(package: _Package) -> None:
@@ -276,3 +287,67 @@ def test_a_dev_dependency_on_wasm_is_allowed() -> None:
     """npm never installs a dependency's devDependencies, so carrying one is fine."""
     manifest = _facade_manifest(devDependencies={"@polylib/polylib-wasm": "0.1.0"})
     assert verify_facade_peer_declaration(manifest) == []
+
+
+def _write_pe(path: Path, *, arch: str) -> None:
+    """Write a minimal PE image declaring `arch`."""
+    machine = 0xAA64 if arch == "arm64" else 0x8664
+    header = bytearray(b"MZ" + b"\x00" * 62)
+    header[0x3C:0x40] = (64).to_bytes(4, "little")  # e_lfanew
+    header += b"PE\x00\x00"
+    header += machine.to_bytes(2, "little") + b"\x00" * 26
+    path.write_bytes(bytes(header))
+
+
+def _write_macho(path: Path, *, arch: str) -> None:
+    """Write a minimal 64-bit little-endian Mach-O header for `arch`."""
+    cpu = 0x0100000C if arch == "arm64" else 0x01000007
+    path.write_bytes(b"\xcf\xfa\xed\xfe" + cpu.to_bytes(4, "little") + b"\x00" * 24)
+
+
+def _write_elf(path: Path, *, arch: str) -> None:
+    """Write a minimal ELF header declaring `arch`."""
+    machine = 183 if arch == "aarch64" else 62
+    header = b"\x7fELF" + bytes([2, 1, 1, 0]) + b"\x00" * 8
+    header += (2).to_bytes(2, "little")  # e_type
+    header += machine.to_bytes(2, "little")
+    path.write_bytes(header + b"\x00" * 32)
+
+
+def test_a_matching_addon_payload_passes(package: _Package) -> None:
+    """The common case: a Linux x64 package holding an x86_64 ELF."""
+    package.write(["x86_64-unknown-linux-gnu"])
+    write_platform_packages(package.root)
+    addon = package.root / "npm" / "linux-x64-gnu" / "polylib.linux-x64-gnu.node"
+    _write_elf(addon, arch="x86_64")
+    assert verify_platform_packages(package.root) == []
+
+
+def test_an_addon_with_the_wrong_architecture_is_reported(package: _Package) -> None:
+    """An aarch64 payload in an x64 package installs where it cannot load."""
+    package.write(["x86_64-unknown-linux-gnu"])
+    write_platform_packages(package.root)
+    addon = package.root / "npm" / "linux-x64-gnu" / "polylib.linux-x64-gnu.node"
+    _write_elf(addon, arch="aarch64")
+    problems = verify_platform_packages(package.root)
+    assert any("addon is aarch64, expected x86_64" in problem for problem in problems)
+
+
+def test_an_addon_in_the_wrong_container_is_reported(package: _Package) -> None:
+    """A Linux payload in a darwin package is never loadable there."""
+    package.write(["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"])
+    write_platform_packages(package.root)
+    _write_elf(package.root / "npm" / "linux-x64-gnu" / "polylib.linux-x64-gnu.node", arch="x86_64")
+    _write_elf(package.root / "npm" / "darwin-arm64" / "polylib.darwin-arm64.node", arch="aarch64")
+    problems = verify_platform_packages(package.root)
+    assert any("darwin-arm64: addon is elf, expected macho" in problem for problem in problems)
+
+
+def test_an_addon_that_is_not_a_binary_is_reported(package: _Package) -> None:
+    """A text file named `.node` fails at require time, after the release."""
+    package.write(["x86_64-unknown-linux-gnu"])
+    write_platform_packages(package.root)
+    addon = package.root / "npm" / "linux-x64-gnu" / "polylib.linux-x64-gnu.node"
+    addon.write_text("module.exports = {};\n", encoding="utf-8")
+    problems = verify_platform_packages(package.root)
+    assert any("is not an ELF, Mach-O, or PE binary" in problem for problem in problems)
