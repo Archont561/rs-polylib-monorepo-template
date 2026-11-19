@@ -1,7 +1,7 @@
-import { expect, test } from "@archont561/bun-test-utils";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { expect, test } from "@archont561/bun-test-utils";
 import fc from "fast-check";
 import {
   getNativeVersion,

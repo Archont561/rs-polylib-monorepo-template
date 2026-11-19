@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 from tasknest import ToolError
@@ -26,9 +26,6 @@ from tools._lib.napi_platforms import (
     with_optional_dependencies,
     write_platform_packages,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _TRIPLES = sorted(TRIPLE_TO_SUFFIX)
 
@@ -258,3 +255,18 @@ def test_an_optional_peer_must_be_marked_optional() -> None:
 def test_a_missing_peer_declaration_is_reported() -> None:
     manifest = _facade_manifest(peerDependencies={})
     assert any("missing" in problem for problem in verify_facade_peer_declaration(manifest))
+
+
+def test_the_typescript_loader_agrees_with_this_table() -> None:
+    """The loader's own copy of the suffix map must not drift from this one.
+
+    `bunup.config.ts` needs the mapping at build time, before any Python runs, so
+    it carries a copy. Two copies of a table are how `linux-aarch64-gnu` shipped
+    instead of `linux-arm64-gnu` once already.
+    """
+    config = Path(__file__).resolve().parents[2] / "packages" / "polylib-js" / "bunup.config.ts"
+    text = config.read_text(encoding="utf-8")
+    for triple, suffix in TRIPLE_TO_SUFFIX.items():
+        assert f'"{triple}": "{suffix}"' in text, (
+            f"{triple} -> {suffix} is missing from bunup.config.ts"
+        )

@@ -1,5 +1,5 @@
 import { version } from "@/package.json" with { type: "json" };
-import { initWasm, isInitialized, markInitialized, type WasmInput, wasmDefaultInit } from "./core.js";
+import { isInitialized, markInitialized, type WasmInput, wasmDefaultInit } from "./core.js";
 
 export const VERSION: string = version;
 

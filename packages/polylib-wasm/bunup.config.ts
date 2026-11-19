@@ -30,7 +30,13 @@ function exportedNames(declaration: string, path: string): string[] {
   }
   return (match[1] ?? "")
     .split(",")
-    .map((entry) => entry.trim().split(/\s+as\s+/).at(-1) ?? "")
+    .map(
+      (entry) =>
+        entry
+          .trim()
+          .split(/\s+as\s+/)
+          .at(-1) ?? "",
+    )
     .filter(Boolean)
     .sort();
 }

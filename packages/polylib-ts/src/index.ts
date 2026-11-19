@@ -1,5 +1,5 @@
-import { version } from "@/package.json" with { type: "json" };
 import * as napi from "@polylib/polylib-js";
+import { version } from "@/package.json" with { type: "json" };
 import { type BackendKind, createEngine, PolylibError, type ScoreSummary } from "./shared.js";
 
 // The main entry is native-only and does this eagerly at module load, with no

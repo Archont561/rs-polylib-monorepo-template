@@ -115,6 +115,6 @@ def _write_supported_targets(ctx: ToolContext) -> None:
 
     manifest = ctx.repo_root / _PACKAGES_DIR / "polylib-js" / "package.json"
     suffixes = [target.suffix for target in load_targets(manifest)]
-    out = ctx.repo_root / _PACKAGES_DIR / "polylib-js" / "src" / "supported-targets.json"
+    out = ctx.repo_root / _PACKAGES_DIR / "polylib-js" / "dist" / "supported-targets.json"
     out.write_text(json.dumps(suffixes, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {out.relative_to(ctx.repo_root)} ({len(suffixes)} targets)")
