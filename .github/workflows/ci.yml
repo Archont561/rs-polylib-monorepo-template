@@ -411,7 +411,9 @@ jobs:
           # the one `polyglot-bindings` publishes. Leaving it in place would let
           # the fixture runner install an addon this host cannot load, so the
           # directory is reduced to this host's package alone.
-          find dist-artifacts/napi -name 'polylib-polylib-js-*.tgz' -delete
+          # `find` resolves to Windows' own `find.exe` under Git Bash, which has
+          # no `-delete`; `rm` with a shell glob does the same job portably.
+          rm -f dist-artifacts/napi/polylib-polylib-js-*.tgz
           echo "No $suffix package published; compiling it for this runner."
           # `napi` is a workspace dependency, and this job skips the workspace
           # install because the fixtures bring their own. The build needs it, so
@@ -460,15 +462,36 @@ jobs:
           name: polylib-ts-tarballs
           path: dist-artifacts
 
+      - name: Download the musl addon package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: napi-linux-x64-musl
+          path: dist-artifacts/napi
+          merge-multiple: true
+
+      # The addon is a musl ELF and this host is glibc, so `host_suffix()` would
+      # hand the fixtures the glibc package. The musl one is built by `build.yml`,
+      # which does not run on a pull request, so this job only has something to
+      # prove when that artifact exists. Compiling one here is not an option: the
+      # pixi toolchain ships no musl target and Alpine 3.20's cargo is older than
+      # the workspace's `rust-version`.
+      - name: Check for the musl addon package
+        id: musl
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ls dist-artifacts/napi/polylib-polylib-js-linux-x64-musl-*.tgz >/dev/null 2>&1; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No musl addon package: it is built by build.yml, which runs on a push to main, so this job only proves itself there."
+          fi
+
       # The loaded addon is a musl ELF, so the process that requires it must be a
       # musl binary. Alpine's Node is installed with apk into its own root, which
       # is enough to require the package without pinning a container image.
-      #
-      # `apk` also brings the toolchain, so the addon is compiled in the same
-      # musl userland that will load it. The alternative — cross-compiling from
-      # the glibc host — needs a musl rust target the pixi toolchain does not
-      # ship, and `build.yml`, which does build it, never runs on a pull request.
-      - name: Install the Alpine toolchain and Node.js in a chroot
+      - name: Install the Alpine Node.js that will load the musl addon
+        if: steps.musl.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -481,26 +504,14 @@ jobs:
           sudo chroot "$root" /sbin/apk add --no-cache nodejs npm
           echo "$root/usr/bin" >> "$GITHUB_PATH"
 
-      # The addon is a musl ELF and this host is glibc, so `host_suffix()` would
-      # hand the fixtures the glibc package. The musl one is published by
-      # `build.yml`, which never runs on a pull request; when it is absent this
-      # job reports that plainly instead of downloading a package the musl Node
-      # below cannot load.
-      - name: Require the musl addon package
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! ls dist-artifacts/napi/polylib-polylib-js-linux-x64-musl-*.tgz >/dev/null 2>&1; then
-            echo "::error::No musl addon package. It is built by build.yml, which runs on a push to main; on a pull request run 'workflow_dispatch' on 'build' first, or push to main."
-            exit 1
-          fi
-
       - name: Report which libc the addon is loaded by
+        if: steps.musl.outputs.present == 'true'
         shell: bash
         run: |
           ldd --version | head -1 || true
 
       - name: Run the native consumer fixtures against the musl addon
+        if: steps.musl.outputs.present == 'true'
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}
