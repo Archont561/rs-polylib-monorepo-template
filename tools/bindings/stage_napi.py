@@ -27,6 +27,8 @@ _PACKAGES_DIR = "packages"
 _PKG_DIR = "polylib-js"
 _MANIFEST = "package.json"
 _UTF8 = "utf-8"
+# `napi.binaryName` in the package manifest; every addon file is named after it.
+_ADDON_STEM = "polylib"
 
 
 @tool(
@@ -60,11 +62,15 @@ def stage_target(repo_root: Path, suffix: str) -> Path:
         (
             candidate
             for candidate in (
-                package_root / f"polylib.{suffix}.node",
+                package_root / f"{_ADDON_STEM}.{suffix}.node",
                 # `napi build --output-dir` puts the generated loader and the
                 # addon beside each other instead of in the package root.
-                package_root / "src" / "native" / f"polylib.{suffix}.node",
-                package_root / "npm" / suffix / f"polylib.{suffix}.node",
+                package_root / "src" / "native" / f"{_ADDON_STEM}.{suffix}.node",
+                package_root / "npm" / suffix / f"{_ADDON_STEM}.{suffix}.node",
+                # A per-platform CI runner does not run `napi build`: it runs
+                # `cargo build --target <triple>`, which leaves the cdylib under
+                # `target/<triple>/release/` with cargo's own file name.
+                repo_root / "target" / target.triple / "release" / target.cdylib_name,
             )
             if candidate.is_file()
         ),
@@ -72,12 +78,15 @@ def stage_target(repo_root: Path, suffix: str) -> Path:
     )
     if source is None:
         raise ToolError(
-            f"No polylib.{suffix}.node under {package_root.relative_to(repo_root)}; "
-            "run `napi build --platform` for this target first."
+            f"No {_ADDON_STEM}.{suffix}.node or {target.cdylib_name} for {target.triple}; "
+            "run `napi build --platform` or `cargo build --target` first."
         )
     package_dir = package_root / "npm" / suffix
     package_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, package_dir / source.name)
+    # The directory must end up with the napi name, which is also what the
+    # manifest's `main` points at. A `napi build` source already has it; a cargo
+    # cdylib does not.
+    shutil.copy2(source, package_dir / f"{_ADDON_STEM}.{suffix}.node")
     base = json.loads(manifest_path.read_text(encoding=_UTF8))
     version = str(base["version"])
     manifest = platform_manifest(base, name=target.package_name, suffix=suffix, version=version)

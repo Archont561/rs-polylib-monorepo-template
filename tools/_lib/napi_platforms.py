@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 
 _UTF8 = "utf-8"
 _JS_PKG = "@polylib/polylib-js"
+# `[lib] name` in `crates/polylib-js/Cargo.toml`.
+_JS_CDYLIB = "polylib_js"
 _MANIFEST = "package.json"
 
 # npm package suffixes, which napi-rs derives from the Rust triple. The order is
@@ -99,6 +101,20 @@ class PlatformTarget:
     def is_darwin_x64(self) -> bool:
         """Report whether the target is the Intel macOS build."""
         return self.suffix in _DARWIN_X64_ONLY
+
+    @property
+    def cdylib_name(self) -> str:
+        """Return the file name `cargo build --target` gives the cdylib.
+
+        Cargo names the artifact after the crate's `[lib] name` and the target
+        platform's own convention, so a per-platform runner finds it under
+        `target/<triple>/release/` with this name.
+        """
+        if self.triple.endswith("windows-msvc") or self.triple.endswith("windows-gnu"):
+            return f"{_JS_CDYLIB}.dll"
+        if self.triple.endswith("apple-darwin"):
+            return f"lib{_JS_CDYLIB}.dylib"
+        return f"lib{_JS_CDYLIB}.so"
 
 
 PLATFORM_TARGETS: tuple[PlatformTarget, ...] = tuple(
