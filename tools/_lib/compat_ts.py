@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ _STRICT = "--strict"
 _CHECK_FILE = "check.ts"
 _PACKAGE_JSON = "package.json"
 _UTF8 = "utf-8"
+_NL = "\n"
 _WASM_PKG = "@polylib/polylib-wasm"
 _JS_PKG = "@polylib/polylib-js"
 _FACADE_PKG = "@polylib/polylib"
@@ -319,7 +321,9 @@ class ConsumerCase:
     requires_addon: bool = False
 
 
-def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
+def _backend_cases(
+    tarballs: dict[str, Path], platform_packages: dict[str, Path]
+) -> tuple[ConsumerCase, ...]:
     """Describe the single-backend Bun consumer fixtures."""
     return (
         ConsumerCase(
@@ -329,9 +333,11 @@ def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_WASM_PKG, version_fn="getWasmVersion"),
             _install_argv(),
         ),
+        # A `file:` dependency cannot pull the addon out of the main package's
+        # `optionalDependencies`, so the platform package is named directly.
         ConsumerCase(
             "consumer-js",
-            {_JS_PKG: tarballs[_JS_PKG]},
+            {_JS_PKG: tarballs[_JS_PKG], **platform_packages},
             {},
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_JS_PKG, version_fn="getNativeVersion"),
             _install_argv(),
@@ -340,7 +346,9 @@ def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
     )
 
 
-def _facade_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
+def _facade_cases(
+    tarballs: dict[str, Path], platform_packages: dict[str, Path]
+) -> tuple[ConsumerCase, ...]:
     """Describe the facade Bun consumer fixtures."""
     return (
         # Both backends installed: the main entry must pick the addon and the
@@ -351,6 +359,7 @@ def _facade_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
                 _FACADE_PKG: tarballs[_FACADE_PKG],
                 _WASM_PKG: tarballs[_WASM_PKG],
                 _JS_PKG: tarballs[_JS_PKG],
+                **platform_packages,
             },
             {_WASM_PKG: tarballs[_WASM_PKG], _JS_PKG: tarballs[_JS_PKG]},
             _facade_consumer_source("native"),
@@ -389,13 +398,17 @@ def _verify_bun_and_types(
     root: Path,
     tmp_path: Path,
     tarballs: dict[str, Path],
+    platform_packages: dict[str, Path],
     *,
     run_bun: bool,
     run_types: bool,
     addon_available: bool,
 ) -> tuple[str, ...]:
     skipped: list[str] = []
-    for case in (*_backend_cases(tarballs), *_facade_cases(tarballs)):
+    for case in (
+        *_backend_cases(tarballs, platform_packages),
+        *_facade_cases(tarballs, platform_packages),
+    ):
         if case.requires_addon and not addon_available:
             print(
                 f"- {case.name}: skipped, no compiled addon for this host",
@@ -426,15 +439,34 @@ def _host_platform_tarballs(tmp_path: Path) -> dict[str, Path]:
     Rust toolchain) the mapping is empty and the loader's own error path is what
     the `missing-native` fixture exercises.
     """
-    from tools._lib.napi_platforms import host_suffix
+    from tools._lib.napi_platforms import host_suffix, platform_manifest
 
-    npm_dir = Path("packages/polylib-js/npm")
-    if not npm_dir.is_dir():
-        return {}
     suffix = host_suffix()
-    target_dir = npm_dir / suffix
+    package_root = Path("packages/polylib-js")
+    manifest_path = package_root / _PACKAGE_JSON
+    target_dir = package_root / "npm" / suffix
     if not (target_dir / _PACKAGE_JSON).is_file():
-        return {}
+        # `napi build --platform` leaves `polylib.<suffix>.node` in the package
+        # root; `bindings stage_napi` is what turns that into the publishable
+        # package. Staging it here as well means a checkout that compiled the
+        # addon exercises the addon-dependent fixtures without a separate step,
+        # and a checkout that did not returns nothing instead of a package with
+        # no addon in it.
+        addon = package_root / f"polylib.{suffix}.node"
+        if not (addon.is_file() and manifest_path.is_file()):
+            return {}
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(addon, target_dir / addon.name)
+        base = json.loads(manifest_path.read_text(encoding=_UTF8))
+        manifest = platform_manifest(
+            base,
+            name=f"{_JS_PKG}-{suffix}",
+            suffix=suffix,
+            version=str(base["version"]),
+        )
+        (target_dir / _PACKAGE_JSON).write_text(
+            json.dumps(manifest, indent=2) + _NL, encoding=_UTF8
+        )
     packed = _pack_dir_tarball(target_dir, tmp_path)
     return {f"{_JS_PKG}-{suffix}": packed}
 
@@ -484,11 +516,16 @@ def verify_ts_compat(root: Path, mode: TsCompatMode = MODE_ALL) -> list[CheckRes
                 root,
                 tmp_path,
                 tarballs,
+                platform_packages,
                 run_bun=mode in (MODE_ALL, MODE_BUN),
                 run_types=mode in (MODE_ALL, MODE_TYPES),
                 addon_available=bool(platform_packages),
             )
-            ran = len(_backend_cases(tarballs)) + len(_facade_cases(tarballs)) - len(addon_skipped)
+            ran = (
+                len(_backend_cases(tarballs, platform_packages))
+                + len(_facade_cases(tarballs, platform_packages))
+                - len(addon_skipped)
+            )
             results.append(
                 skipped(
                     "ts-bun-consumers",
