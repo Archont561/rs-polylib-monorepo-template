@@ -60,7 +60,7 @@ export function detectedPlatform(
 
 export function supportedTargets(): readonly string[] {
   try {
-    const path = fileURLToPath(new URL("../supported-targets.json", import.meta.url));
+    const path = fileURLToPath(new URL("./supported-targets.json", import.meta.url));
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
     if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
       return parsed as string[];
@@ -120,9 +120,7 @@ function loadNativeBinding(): NativeBinding {
   }
   const bindingPath = fileURLToPath(new URL("./native/binding.cjs", import.meta.url));
   if (!existsSync(bindingPath)) {
-    throw missingBindingError(
-      new Error(`Missing generated NAPI-RS loader at ${bindingPath}.`),
-    );
+    throw missingBindingError(new Error(`Missing generated NAPI-RS loader at ${bindingPath}.`));
   }
   try {
     // The loader resolves the per-platform package, so it can exist while this
