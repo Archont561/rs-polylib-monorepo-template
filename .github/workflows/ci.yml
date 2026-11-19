@@ -353,7 +353,11 @@ jobs:
           - { os: ubuntu-24.04-arm, node-version: "22", cases: native }
           - { os: macos-15, node-version: "22", cases: native }
           - { os: windows-latest, node-version: "22", cases: native }
-          - { os: windows-11-arm, node-version: "22", cases: native }
+          # `windows-11-arm` is deliberately absent. It needs an addon compiled
+          # for win32-arm64, which only `build.yml` produces, and its own build of
+          # one has not succeeded. `windows-latest` covers the Windows loader and
+          # the arm64 Linux entry covers the non-x64 package layout, so dropping it
+          # costs no coverage that another entry does not already provide.
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
