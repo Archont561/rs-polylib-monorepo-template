@@ -62,8 +62,9 @@ TRIPLE_TO_SUFFIX: dict[str, str] = {
 _RUNNER_FOR_SUFFIX: dict[str, str] = {
     "linux-x64-gnu": "ubuntu-latest",
     "linux-arm64-gnu": "ubuntu-24.04-arm",
-    # musl targets link dynamically against musl-tools on the matching runner:
-    # an Alpine container cannot run `actions/checkout` on an arm64 runner.
+    # The musl addons compile in an Alpine container started by `docker run`,
+    # because a shared object needs musl's own `libgcc_s`, which the glibc
+    # runners do not have. The runner's architecture matches its target.
     "linux-x64-musl": "ubuntu-latest",
     "linux-arm64-musl": "ubuntu-24.04-arm",
     # `macos-13` was retired; `macos-15-intel` is the current x64 macOS image.
