@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -22,6 +21,7 @@ from tools._lib.status import (
     skipped,
 )
 from tools._lib.tarball_ref import tarball_ref
+from tools.bindings.stage_napi import stage_target
 
 _BUN = "bun"
 _BUN_EXEC_ARGS: tuple[str, ...] = ("x", "--bun", "--no-install")
@@ -35,6 +35,10 @@ _NL = "\n"
 _WASM_PKG = "@polylib/polylib-wasm"
 _JS_PKG = "@polylib/polylib-js"
 _FACADE_PKG = "@polylib/polylib"
+_JS_PKG_DIR = "polylib-js"
+_PACKAGES_DIR = "packages"
+# `napi build --platform` names the artifact `polylib.<suffix>.node`.
+_JS_ADDON_STEM = "polylib"
 
 TsCompatMode = Literal["all", "pack", "bun", "node", "types"]
 
@@ -432,43 +436,46 @@ def _verify_bun_and_types(
 def _host_platform_tarballs(tmp_path: Path) -> dict[str, Path]:
     """Pack the per-platform addon package this host would install.
 
-    `napi artifacts` drops the compiled addon into `packages/polylib-js/npm/<suffix>/`.
-    A `file:` dependency cannot reach that directory through
-    `optionalDependencies`, so the consumer fixture installs it by name and this
-    helper hands it the matching tarball. When the addon was never built (no
-    Rust toolchain) the mapping is empty and the loader's own error path is what
-    the `missing-native` fixture exercises.
-    """
-    from tools._lib.napi_platforms import host_suffix, platform_manifest
+    A checkout that compiled the addon carries `polylib.<suffix>.node` at the
+    package root (where `napi build --platform` writes it). Nothing in CI stages
+    that into a publishable package before this task runs, and the consumer
+    fixtures install by package name, so the tarball has to be produced here.
+    Staging goes through `bindings stage_napi`, the same code that publishes the
+    package, rather than a second copy of the layout rules.
 
+    Returns an empty mapping when no addon was compiled, so the caller reports a
+    skip instead of packing a platform package with no addon in it.
+    """
+    from tools._lib.napi_platforms import host_suffix, load_targets
+
+    package_root = Path(_PACKAGES_DIR) / _JS_PKG_DIR
     suffix = host_suffix()
-    package_root = Path("packages/polylib-js")
-    manifest_path = package_root / _PACKAGE_JSON
-    target_dir = package_root / "npm" / suffix
-    if not (target_dir / _PACKAGE_JSON).is_file():
-        # `napi build --platform` leaves `polylib.<suffix>.node` in the package
-        # root; `bindings stage_napi` is what turns that into the publishable
-        # package. Staging it here as well means a checkout that compiled the
-        # addon exercises the addon-dependent fixtures without a separate step,
-        # and a checkout that did not returns nothing instead of a package with
-        # no addon in it.
-        addon = package_root / f"polylib.{suffix}.node"
-        if not (addon.is_file() and manifest_path.is_file()):
-            return {}
-        target_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(addon, target_dir / addon.name)
-        base = json.loads(manifest_path.read_text(encoding=_UTF8))
-        manifest = platform_manifest(
-            base,
-            name=f"{_JS_PKG}-{suffix}",
-            suffix=suffix,
-            version=str(base["version"]),
-        )
-        (target_dir / _PACKAGE_JSON).write_text(
-            json.dumps(manifest, indent=2) + _NL, encoding=_UTF8
-        )
-    packed = _pack_dir_tarball(target_dir, tmp_path)
-    return {f"{_JS_PKG}-{suffix}": packed}
+    targets = {target.suffix: target for target in load_targets(package_root / _PACKAGE_JSON)}
+    target = targets.get(suffix)
+    if target is None:
+        return {}
+    if not _addon_exists(package_root, suffix):
+        return {}
+    package_dir = stage_target(Path.cwd(), suffix)
+    packed = _pack_dir_tarball(package_dir, tmp_path)
+    return {target.package_name: packed}
+
+
+def _addon_exists(package_root: Path, suffix: str) -> bool:
+    """True when this checkout carries the compiled addon for `suffix`.
+
+    `napi build --platform` writes `polylib.<suffix>.node` into the package
+    root, but a build that also passes `--output-dir` can leave it beside the
+    generated loader, and `bindings stage_napi` may have moved it into
+    `npm/<suffix>/` already. Any of the three means the addon exists here.
+    """
+    name = f"{_JS_ADDON_STEM}.{suffix}.node"
+    candidates = (
+        package_root / name,
+        package_root / "src" / "native" / name,
+        package_root / "npm" / suffix / name,
+    )
+    return any(candidate.is_file() for candidate in candidates)
 
 
 def _pack_dir_tarball(package_dir: Path, tmp_path: Path) -> Path:
