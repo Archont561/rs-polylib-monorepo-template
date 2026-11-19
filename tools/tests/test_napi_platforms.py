@@ -351,3 +351,35 @@ def test_an_addon_that_is_not_a_binary_is_reported(package: _Package) -> None:
     addon.write_text("module.exports = {};\n", encoding="utf-8")
     problems = verify_platform_packages(package.root)
     assert any("is not an ELF, Mach-O, or PE binary" in problem for problem in problems)
+
+
+def test_every_runner_is_a_label_the_workflow_validator_accepts() -> None:
+    """A retired runner label fails the workflow at parse time, not at build time.
+
+    `macos-13` was retired and actionlint rejects it outright, so a stale label
+    here means the matrix never starts.
+    """
+    retired = {"macos-13", "ubuntu-20.04"}
+    for target in PLATFORM_TARGETS:
+        assert target.runner not in retired, f"{target.suffix} uses retired runner {target.runner}"
+        assert target.runner.startswith(("ubuntu-", "macos-", "windows-")), target.runner
+
+
+def test_the_facade_maps_the_wasm_package_onto_a_real_entry() -> None:
+    """A `paths` mapping must name an entry that actually exports the API.
+
+    `packages/polylib-wasm/src/index.ts` is a placeholder required by a layout
+    rule, so a mapping onto `src/index.ts` resolves to `export {}` and the facade
+    fails with "has no exported member".
+    """
+    import json
+
+    root = Path(__file__).resolve().parents[2]
+    tsconfig = json.loads((root / "packages/polylib-ts/tsconfig.json").read_text(encoding="utf-8"))
+    mapped = tsconfig["compilerOptions"]["paths"]["@polylib/polylib-wasm"]
+    assert mapped == ["../polylib-wasm/src/index.node.ts"], mapped
+    for relative in mapped:
+        target = (root / "packages/polylib-ts" / relative).resolve()
+        assert target.is_file(), f"{relative} does not exist"
+        source = target.read_text(encoding="utf-8")
+        assert "normalizeSlug" in source, f"{relative} does not re-export the API"

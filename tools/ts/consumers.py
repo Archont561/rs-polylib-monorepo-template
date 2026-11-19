@@ -104,12 +104,14 @@ def ts_consumers(
     tarball_dir: str,
     platform_dir: str = "",
     cases: CaseSet = _ALL_CASES,
+    runner: str = "node",
 ) -> CheckResult:
     """Install the packed tarballs into isolated fixtures and run them.
 
     `--cases native` restricts to the fixtures that need a compiled addon, which
     is what an OS-specific matrix entry runs; `all` adds the browser, CommonJS
-    bundle, and missing-package fixtures.
+    bundle, and missing-package fixtures. `--runner` picks the interpreter that
+    executes each fixture, so the Bun matrix runs the same programs.
     """
     if cases not in get_args(CaseSet):
         expected = ", ".join(get_args(CaseSet))
@@ -131,6 +133,7 @@ def ts_consumers(
         selected,
         ctx.repo_root / "dist-artifacts" / "consumers",
         native_addon_available=bool(platform),
+        runner=runner,
     )
     ran = len(selected) - len(skipped)
     if skipped:
