@@ -408,6 +408,10 @@ jobs:
             exit 0
           fi
           echo "No $suffix package published; compiling it for this runner."
+          # `napi` is a workspace dependency, and this job skips the workspace
+          # install because the fixtures bring their own. The build needs it, so
+          # it is installed here rather than for the whole job.
+          pixi run -e full bun install --frozen-lockfile
           # The package's own script runs `napi build --platform`, which targets
           # exactly the host that is running it. The `bindings build --target
           # napi` task would compile all eight targets instead, seven of which
@@ -469,33 +473,22 @@ jobs:
             "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz"
           sudo tar xzf /tmp/alpine-minirootfs.tar.gz -C "$root"
           sudo cp /etc/resolv.conf "$root/etc/resolv.conf"
-          sudo chroot "$root" /sbin/apk add --no-cache \
-            nodejs npm rust cargo musl-dev gcc make perl
+          sudo chroot "$root" /sbin/apk add --no-cache nodejs npm
           echo "$root/usr/bin" >> "$GITHUB_PATH"
 
-      - name: Compile the musl addon inside the chroot
+      # The addon is a musl ELF and this host is glibc, so `host_suffix()` would
+      # hand the fixtures the glibc package. The musl one is published by
+      # `build.yml`, which never runs on a pull request; when it is absent this
+      # job reports that plainly instead of downloading a package the musl Node
+      # below cannot load.
+      - name: Require the musl addon package
         shell: bash
         run: |
           set -euo pipefail
-          root="$RUNNER_TEMP/alpine"
-          # The workspace is bind-mounted rather than copied so the tarball lands
-          # in `dist-artifacts` where the fixture runner looks for it.
-          sudo mkdir -p "$root$GITHUB_WORKSPACE"
-          sudo mount --bind "$GITHUB_WORKSPACE" "$root$GITHUB_WORKSPACE"
-          sudo chroot "$root" /bin/sh -c "
-            set -eux
-            cd '$GITHUB_WORKSPACE'
-            cargo build --release --target x86_64-unknown-linux-musl -p polylib-js --locked
-          "
-          suffix=linux-x64-musl
-          cp "target/x86_64-unknown-linux-musl/release/libpolylib_js.so" \
-            "packages/polylib-js/polylib.$suffix.node"
-          mkdir -p dist-artifacts/napi
-          pixi run -e full tools run bindings stage_napi --suffix "$suffix"
-          pixi run -e full bun pm pack \
-            --cwd "packages/polylib-js/npm/$suffix" \
-            --destination "$PWD/dist-artifacts/napi"
-          sudo umount "$root$GITHUB_WORKSPACE"
+          if ! ls dist-artifacts/napi/polylib-polylib-js-linux-x64-musl-*.tgz >/dev/null 2>&1; then
+            echo "::error::No musl addon package. It is built by build.yml, which runs on a push to main; on a pull request run 'workflow_dispatch' on 'build' first, or push to main."
+            exit 1
+          fi
 
       - name: Report which libc the addon is loaded by
         shell: bash
