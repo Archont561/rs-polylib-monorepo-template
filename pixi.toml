@@ -2,10 +2,12 @@
 name = "polyglot-lib-template"
 version = "0.1.0"
 channels = ["https://prefix.dev/archont561/archont561", "conda-forge"]
-# `linux-aarch64` is here for the `ubuntu-24.04-arm` CI runners. Pixi refuses to
-# create an environment for a platform the workspace does not list, so without it
-# every pixi command on that runner fails before it runs anything.
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
+# Every platform a CI runner uses has to be listed here: Pixi refuses to create
+# an environment for one it does not, so a missing entry fails every pixi command
+# on that runner before it runs anything. `linux-aarch64` covers
+# `ubuntu-24.04-arm` and `osx-64` covers `macos-15-intel`; `macos-15` is
+# `osx-arm64`.
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
 
 # ---------------------------------------------------------------------------
 # Single automation entrypoint (enforced by .alint/schemas/pixi-tasks.schema.json)
