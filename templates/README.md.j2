@@ -99,7 +99,7 @@ real artifact and consumes it as a user would.
 The three TypeScript rows are one ecosystem with three delivery shapes. The
 facade's main entry is native and imports the addon statically; WebAssembly is an
 explicit `@polylib/polylib/wasm` opt-in behind an optional peer, and a browser
-bundler resolves the main entry to a stub that throws rather than shipping an
+bundle resolves the main entry to a stub that throws rather than shipping an
 addon call that can't work. The two direct packages are for consumers who want
 to choose the engine themselves.
 

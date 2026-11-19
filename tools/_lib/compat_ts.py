@@ -18,6 +18,7 @@ from tools._lib.status import (
     passed,
     publish_ready,
     render,
+    skipped,
 )
 from tools._lib.tarball_ref import tarball_ref
 
@@ -52,6 +53,11 @@ class TsPackageSpec:
     artifact_rel: str
     build_hint: str
     pkg_name: str
+    # Subpaths `attw` cannot type-check. A raw `.wasm` binary is published for
+    # bundlers to fetch, and has no JavaScript entry point and no declarations,
+    # so resolution there is expected to fail. Listing it here keeps the check
+    # strict for everything that is actually importable.
+    attw_exclude: tuple[str, ...] = ()
 
 
 _PACKAGES: tuple[TsPackageSpec, ...] = (
@@ -61,6 +67,7 @@ _PACKAGES: tuple[TsPackageSpec, ...] = (
         artifact_rel="src/wasm/polylib_wasm_bg.wasm",
         build_hint="pixi run -e full tools run bindings build --target wasm",
         pkg_name=_WASM_PKG,
+        attw_exclude=("polylib_wasm_bg.wasm",),
     ),
     TsPackageSpec(
         rel_dir="packages/polylib-js",
@@ -92,9 +99,9 @@ if (summary.count !== 3 || summary.mean !== 20) {{
 _FACADE_CHECK_TEMPLATE = """\
 import {{ BACKEND, getEngineVersion, normalizeSlug, summarizeScores, VERSION }} from "{facade}";
 import * as wasmApi from "{facade}/wasm";
-{native_import}\
+
 if (BACKEND !== "{expected_backend}" || getEngineVersion() !== VERSION) {{
-  throw new Error(`Unexpected facade backend: ${{BACKEND}} (${{VERSION}})`);
+  throw new Error(`Unexpected facade engine: ${{BACKEND}} (${{VERSION}})`);
 }}
 if (normalizeSlug("Hello Facade!") !== "hello-facade") {{
   throw new Error("Unexpected facade slug result");
@@ -102,18 +109,61 @@ if (normalizeSlug("Hello Facade!") !== "hello-facade") {{
 if (wasmApi.BACKEND !== "wasm" || wasmApi.normalizeSlug("Hi!") !== "hi") {{
   throw new Error("Unexpected {facade}/wasm result");
 }}
-{native_check}\
 const summary = summarizeScores([10, 20, 30]);
 if (summary.count !== 3 || summary.mean !== 20) {{
   throw new Error("Unexpected facade summary result");
 }}
 """
 
-_NATIVE_SUBPATH_CHECK = (
-    'if (nativeApi.BACKEND !== "native" || nativeApi.normalizeSlug("Hi!") !== "hi") {\n'
-    '  throw new Error("Unexpected @polylib/polylib/native result");\n'
-    "}\n"
-)
+# Without the addon the main entry must fail loudly, and `/wasm` must still work.
+# This is the shape a `--omit=optional` install gets, so it is what a user on an
+# unsupported platform sees.
+# Applied with `.format(facade=...)`, hence the doubled braces. Used by the
+# "peer installed, addon missing" fixture, so it asserts `missing_native_binding`
+# at the first call and that `/wasm` still works.
+_FACADE_WASM_ONLY_CHECK = """\
+import {{ normalizeSlug }} from "{facade}";
+
+// The loader resolves the addon lazily, so the failure lands on the first call
+// rather than on import: a program that never touches the native API keeps
+// working, and one that does gets a named error instead of a stack trace.
+let caught: unknown;
+try {{
+  normalizeSlug("Hi!");
+}} catch (err) {{
+  caught = err;
+}}
+if (caught === undefined) {{
+  throw new Error("The main entry ran without a native binding.");
+}}
+const code = (caught as {{ code?: string }}).code;
+if (code !== "missing_native_binding") {{
+  throw new Error(`Expected missing_native_binding, got ${{code}}`);
+}}
+const wasm = await import("{facade}/wasm");
+if (wasm.BACKEND !== "wasm" || wasm.normalizeSlug("Only Wasm!") !== "only-wasm") {{
+  throw new Error("The /wasm subpath did not work without the addon.");
+}}
+"""
+
+# A browser target must resolve the main entry to the stub, never to the native
+# module. Bundling this and reading the output is the only way to prove which
+# file the `default` condition selected.
+_FACADE_BROWSER_CHECK = """\
+import * as facade from "{facade}";
+export const probe = facade;
+"""
+
+_TS_CONSUMER_CHECK = """\
+import {{ BACKEND, normalizeSlug, type ScoreSummary }} from "{facade}";
+import {{ getWasmVersion }} from "{wasm}";
+
+const slug: string = normalizeSlug("Typed Consumer!");
+const backend: string = BACKEND;
+const summary: ScoreSummary = {{ count: 1, min: 1, max: 1, mean: 1, total: 1 }};
+const version: string = getWasmVersion();
+export const evidence = [slug, backend, summary.count, version] as const;
+"""
 
 
 def _run_checked(argv: tuple[str, ...], cwd: Path) -> None:
@@ -133,16 +183,11 @@ def _bun_argv(*args: str) -> tuple[str, ...]:
     return (resolve_program(_BUN), *args)
 
 
-def _facade_consumer_source(expected_backend: str, *, include_native_subpath: bool) -> str:
-    native_import = (
-        f'import * as nativeApi from "{_FACADE_PKG}/native";\n' if include_native_subpath else ""
-    )
-    native_check = _NATIVE_SUBPATH_CHECK if include_native_subpath else ""
+def _facade_consumer_source(expected_backend: str) -> str:
+    """Source for a facade consumer asserting which engine the main entry chose."""
     return _FACADE_CHECK_TEMPLATE.format(
         facade=_FACADE_PKG,
         expected_backend=expected_backend,
-        native_import=native_import,
-        native_check=native_check,
     )
 
 
@@ -246,10 +291,10 @@ def _pack_tarball(root: Path, spec: TsPackageSpec, tmp_path: Path, *, lint_pkg: 
     tarball = next(tmp_path.glob(spec.tarball_glob))
     if lint_pkg:
         _run_checked(_bun_argv(*_BUN_EXEC_ARGS, "publint", "run", str(tarball), _STRICT), pkg_dir)
-        _run_checked(
-            _bun_argv(*_BUN_EXEC_ARGS, "attw", str(tarball), "--profile", "esm-only", "--no-emoji"),
-            pkg_dir,
-        )
+        attw_argv = [*_BUN_EXEC_ARGS, "attw", str(tarball), "--profile", "esm-only", "--no-emoji"]
+        for entrypoint in spec.attw_exclude:
+            attw_argv.extend(("--exclude-entrypoints", entrypoint))
+        _run_checked(_bun_argv(*attw_argv), pkg_dir)
     return tarball
 
 
@@ -268,6 +313,10 @@ class ConsumerCase:
     overrides: dict[str, Path]
     source: str
     install_argv: tuple[str, ...]
+    # True when the fixture cannot work without a compiled addon. The in-tree
+    # gate has none (no Rust toolchain), while the CI matrix stages one, so these
+    # are skipped here and run there.
+    requires_addon: bool = False
 
 
 def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
@@ -286,6 +335,7 @@ def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
             {},
             _BACKEND_CHECK_TEMPLATE.format(pkg_name=_JS_PKG, version_fn="getNativeVersion"),
             _install_argv(),
+            requires_addon=True,
         ),
     )
 
@@ -293,19 +343,44 @@ def _backend_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
 def _facade_cases(tarballs: dict[str, Path]) -> tuple[ConsumerCase, ...]:
     """Describe the facade Bun consumer fixtures."""
     return (
+        # Both backends installed: the main entry must pick the addon and the
+        # `/wasm` subpath must still be usable beside it.
         ConsumerCase(
             "consumer-facade-native",
-            {_FACADE_PKG: tarballs[_FACADE_PKG]},
+            {
+                _FACADE_PKG: tarballs[_FACADE_PKG],
+                _WASM_PKG: tarballs[_WASM_PKG],
+                _JS_PKG: tarballs[_JS_PKG],
+            },
             {_WASM_PKG: tarballs[_WASM_PKG], _JS_PKG: tarballs[_JS_PKG]},
-            _facade_consumer_source("native", include_native_subpath=True),
+            _facade_consumer_source("native"),
             _install_argv(),
+            requires_addon=True,
         ),
+        # The WebAssembly peer installed but no addon: the main entry imports the
+        # addon statically, so it fails with `missing_native_binding` rather than
+        # switching engine. `/wasm` still works, which is the supported escape.
+        # The facade depends on `@polylib/polylib-js`, so the override points it
+        # at the local tarball; without it Bun tries the registry. `--omit=optional`
+        # then leaves the per-platform addon out, which is the case under test.
         ConsumerCase(
-            "consumer-facade-wasm-fallback",
-            {_FACADE_PKG: tarballs[_FACADE_PKG]},
-            {_WASM_PKG: tarballs[_WASM_PKG]},
-            _facade_consumer_source("wasm", include_native_subpath=False),
+            "consumer-facade-wasm-only",
+            {_FACADE_PKG: tarballs[_FACADE_PKG], _WASM_PKG: tarballs[_WASM_PKG]},
+            {_JS_PKG: tarballs[_JS_PKG]},
+            _FACADE_WASM_ONLY_CHECK.format(facade=_FACADE_PKG),
             _install_argv(("--omit=optional",)),
+        ),
+        # A browser target must reach the stub, not the addon.
+        ConsumerCase(
+            "consumer-facade-browser",
+            {
+                _FACADE_PKG: tarballs[_FACADE_PKG],
+                _WASM_PKG: tarballs[_WASM_PKG],
+                _JS_PKG: tarballs[_JS_PKG],
+            },
+            {_WASM_PKG: tarballs[_WASM_PKG], _JS_PKG: tarballs[_JS_PKG]},
+            _FACADE_BROWSER_CHECK.format(facade=_FACADE_PKG),
+            _install_argv(),
         ),
     )
 
@@ -317,8 +392,17 @@ def _verify_bun_and_types(
     *,
     run_bun: bool,
     run_types: bool,
-) -> None:
+    addon_available: bool,
+) -> tuple[str, ...]:
+    skipped: list[str] = []
     for case in (*_backend_cases(tarballs), *_facade_cases(tarballs)):
+        if case.requires_addon and not addon_available:
+            print(
+                f"- {case.name}: skipped, no compiled addon for this host",
+                flush=True,
+            )
+            skipped.append(case.name)
+            continue
         consumer_dir = tmp_path / case.name
         manifest = _consumer_manifest(
             case.name,
@@ -329,6 +413,7 @@ def _verify_bun_and_types(
         )
         _prepare_consumer(consumer_dir, manifest, case.source, case.install_argv)
         _check_consumer_runtime_and_types(root, consumer_dir, run_bun=run_bun, run_types=run_types)
+    return tuple(skipped)
 
 
 def _host_platform_tarballs(tmp_path: Path) -> dict[str, Path]:
@@ -393,13 +478,30 @@ def verify_ts_compat(root: Path, mode: TsCompatMode = MODE_ALL) -> list[CheckRes
                 "@polylib/polylib-wasm, @polylib/polylib-js, and @polylib/polylib",
             )
         )
+        platform_packages = _host_platform_tarballs(tmp_path)
         if mode in (MODE_ALL, MODE_BUN, MODE_TYPES):
-            _verify_bun_and_types(
+            addon_skipped = _verify_bun_and_types(
                 root,
                 tmp_path,
                 tarballs,
                 run_bun=mode in (MODE_ALL, MODE_BUN),
                 run_types=mode in (MODE_ALL, MODE_TYPES),
+                addon_available=bool(platform_packages),
+            )
+            ran = len(_backend_cases(tarballs)) + len(_facade_cases(tarballs)) - len(addon_skipped)
+            results.append(
+                skipped(
+                    "ts-bun-consumers",
+                    "no compiled addon for this host, so "
+                    f"{', '.join(addon_skipped)} could not run; the other {ran} fixtures "
+                    "passed. Build one with "
+                    "`pixi run -e full tools run bindings build --target napi`.",
+                )
+                if addon_skipped
+                else passed(
+                    "ts-bun-consumers",
+                    evidence=f"{ran} fixture(s) installed with Bun and type-checked with tsc",
+                )
             )
         if mode in (MODE_ALL, MODE_NODE):
             results.append(
@@ -407,7 +509,7 @@ def verify_ts_compat(root: Path, mode: TsCompatMode = MODE_ALL) -> list[CheckRes
                     tmp_path,
                     ConsumerSetup(
                         tarballs=tarballs,
-                        platform_packages=_host_platform_tarballs(tmp_path),
+                        platform_packages=platform_packages,
                     ),
                     require_node=(mode == MODE_NODE),
                 )
