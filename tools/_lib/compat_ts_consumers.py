@@ -56,6 +56,7 @@ class ConsumerCase:
     install_args: tuple[str, ...] = ()
     needs_bundler: bool = False
     requires_native: bool = False
+    runner: str = _NODE
 
     def manifest(self, consumer_dir: Path) -> dict[str, object]:
         """Build the consumer's `package.json` with relative tarball references."""
@@ -315,7 +316,11 @@ def _run_bundler_case(case: ConsumerCase, consumer_dir: Path) -> None:
 
 
 def run_consumer_cases(
-    cases: tuple[ConsumerCase, ...], root: Path, *, native_addon_available: bool = True
+    cases: tuple[ConsumerCase, ...],
+    root: Path,
+    *,
+    native_addon_available: bool = True,
+    runner: str | None = None,
 ) -> tuple[str, ...]:
     """Install each fixture with npm and run its program.
 
@@ -328,7 +333,6 @@ def run_consumer_cases(
     Returns the names of the cases that were skipped.
     """
     npm = resolve_program(_NPM)
-    node = resolve_program(_NODE)
     skipped: list[str] = []
     for case in cases:
         if case.requires_native and not native_addon_available:
@@ -347,7 +351,10 @@ def run_consumer_cases(
         if case.needs_bundler:
             _run_bundler_case(case, consumer_dir)
             continue
-        _run((node, case.script_name), consumer_dir)
+        # `runner` overrides every case's own interpreter, which is how the Bun
+        # matrix runs the identical fixtures under a different runtime. A
+        # `.cjs` program is still valid input; Bun and Node both read it.
+        _run((resolve_program(runner or case.runner), case.script_name), consumer_dir)
     return tuple(skipped)
 
 

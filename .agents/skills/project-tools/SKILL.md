@@ -355,7 +355,7 @@ Pack npm tarballs and verify `publint`, `attw`, Bun, Node.js, and `tsc`.
 ### `pixi run tools run ts consumers` (`ts.consumers`)
 Run the published-tarball consumer fixtures (`--tarball-dir`, `--platform-dir`).
 - Marks: ts, ci
-- Options: --tarball-dir &lt;str&gt;, --platform-dir &lt;str&gt;, --cases &lt;&#39;all&#39;|&#39;native&#39;&gt;
+- Options: --tarball-dir &lt;str&gt;, --platform-dir &lt;str&gt;, --cases &lt;&#39;all&#39;|&#39;native&#39;&gt;, --runner &lt;str&gt;
 
 ### `pixi run tools run ts lint` (`ts.lint`)
 Run Biome checks and TypeScript strict type-checking.

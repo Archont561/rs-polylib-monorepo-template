@@ -6,6 +6,14 @@ inputs:
     description: "Shared key prefix for Swatinem/rust-cache."
     required: false
     default: "polyglot-bindings"
+  napi-target:
+    description: "Compile only this Rust target for the NAPI-RS addon, instead of the host's default."
+    required: false
+    default: ""
+  container:
+    description: "Alpine image the matrix builds a musl target inside, or empty."
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -17,6 +25,24 @@ runs:
         install-bun: "true"
         cache-key: ${{ inputs.cache-key }}
 
+    - name: Install musl build tools
+      if: inputs.container != ''
+      shell: sh
+      run: apk add --no-cache musl-dev perl make
+
     - name: Build PyO3, wasm-bindgen, and NAPI-RS artifacts
+      if: inputs.napi-target == ''
       shell: bash
       run: pixi run -e full tools run bindings build
+
+    # A per-platform runner compiles exactly one target. `bindings build` compiles
+    # the whole set, which is what the shared job wants and what this one must
+    # not do: it would build seven targets that cannot run on this host.
+    - name: Compile the NAPI-RS addon for one target
+      if: inputs.napi-target != ''
+      shell: bash
+      env:
+        NAPI_TARGET: ${{ inputs.napi-target }}
+      run: |
+        pixi run -e full cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
+        pixi run -e full tools run bindings build --target ts

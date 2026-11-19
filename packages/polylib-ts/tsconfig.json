@@ -5,7 +5,7 @@
     "paths": {
       "@/*": ["./*"],
       "@polylib/polylib-js": ["../polylib-js/src/index.ts"],
-      "@polylib/polylib-wasm": ["../polylib-wasm/src/index.ts"]
+      "@polylib/polylib-wasm": ["../polylib-wasm/src/index.node.ts"]
     }
   },
   "include": ["src", "tests", "package.json", "bunup.config.ts"]

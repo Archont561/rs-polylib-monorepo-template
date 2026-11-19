@@ -62,7 +62,8 @@ _RUNNER_FOR_SUFFIX: dict[str, str] = {
     "linux-arm64-gnu": "ubuntu-24.04-arm",
     "linux-x64-musl": "ubuntu-latest",  # built inside an alpine container
     "linux-arm64-musl": "ubuntu-24.04-arm",  # built inside an alpine container
-    "darwin-x64": "macos-13",
+    # `macos-13` was retired; `macos-15-intel` is the current x64 macOS image.
+    "darwin-x64": "macos-15-intel",
     "darwin-arm64": "macos-15",
     "win32-x64-msvc": "windows-latest",
     "win32-arm64-msvc": "windows-11-arm",

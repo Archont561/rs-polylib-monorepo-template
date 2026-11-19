@@ -352,28 +352,29 @@ jobs:
       - name: Install tarballs and run the consumer fixtures
         shell: bash
         run: |
-          pixi run -e js tools run ts consumers \
+          pixi run -e js tools run ts consumers --runner bun \
             --tarball-dir dist-artifacts \
             --platform-dir dist-artifacts/napi \
             --cases "${{ matrix.cases }}"
 
   node-musl:
-    name: Node.js Compatibility (Alpine / musl)
+    name: Node.js Compatibility (musl addon on glibc host)
     needs: [changes, polyglot-bindings]
     if: github.event_name != 'push' && needs.changes.outputs.js == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    container: node:22-alpine
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install the toolchain
-        run: |
-          apk add --no-cache python3 py3-pip git bash
-          python3 -m pip install --break-system-packages --quiet tasknest
+      - name: Setup Pixi + Bun for the consumer harness
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: full
+          install-bun: "true"
+          cache-key: ci-node-musl
 
       - name: Download packed TypeScript tarballs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -388,11 +389,34 @@ jobs:
           path: dist-artifacts/napi
           merge-multiple: true
 
-      - name: Run the native consumer fixtures on musl
+      # The loaded addon is a musl ELF, so the process that requires it must be a
+      # musl binary. Alpine's Node is installed with apk into its own root, which
+      # is enough to require the package without pinning a container image.
+      - name: Install the Alpine Node.js that will load the musl addon
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/alpine"
+          mkdir -p "$root"
+          curl -fsSLo /tmp/alpine-minirootfs.tar.gz \
+            "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz"
+          sudo tar xzf /tmp/alpine-minirootfs.tar.gz -C "$root"
+          sudo cp /etc/resolv.conf "$root/etc/resolv.conf"
+          sudo chroot "$root" /sbin/apk add --no-cache nodejs npm
+          echo "$root/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Report which libc the addon is loaded by
+        shell: bash
+        run: |
+          ldd --version | head -1 || true
+
+      - name: Run the native consumer fixtures against the musl addon
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
+          # The chrooted Node is what `npm` and `node` resolve to now, so the
+          # fixture installs and runs entirely inside the musl userland.
           python3 -B -m tasknest run ts consumers \
             --tarball-dir dist-artifacts \
             --platform-dir dist-artifacts/napi \
@@ -403,7 +427,7 @@ jobs:
     needs: [changes, polyglot-bindings]
     if: github.event_name != 'push' && needs.changes.outputs.js == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -419,93 +443,36 @@ jobs:
         with:
           bun-version: ${{ matrix.bun-version }}
 
+      - name: Setup Pixi for the consumer harness
+        uses: ./.github/actions/setup-rust
+        with:
+          environment: full
+          install-bun: "false"
+          cache-key: ci-bun-${{ matrix.bun-version }}
+
       - name: Download packed TypeScript tarballs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: polylib-ts-tarballs
           path: dist-artifacts
 
-      - name: Install tarballs and verify native + WASM-fallback in Bun
+      - name: Download the addon package for this host
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: napi-linux-x64-gnu
+          path: dist-artifacts/napi
+          merge-multiple: true
+
+      # Bun is what runs the consumer process here, which is the point of this
+      # job: the same fixtures `ts compat` uses, on each supported Bun version.
+      - name: Run the consumer fixtures under Bun
         uses: ./.github/actions/diagnose
         with:
           label: "bun consumer matrix"
           command: |
-            # The tarballs are copied next to the consumer directories and
-            # referenced with paths that are relative to the consumer. An
-            # absolute `file:` reference is ambiguous: Bun reads a Windows
-            # drive letter as a URL host and then cannot find the tarball.
-            # The consumer stays outside the repository so that the monorepo
-            # workspace root is never picked up.
-            mkdir -p /tmp/bun-consumers/tarballs /tmp/bun-consumers/native /tmp/bun-consumers/wasm
-            cp dist-artifacts/polylib-polylib-wasm-*.tgz /tmp/bun-consumers/tarballs/
-            cp dist-artifacts/polylib-polylib-js-*.tgz /tmp/bun-consumers/tarballs/
-            cp dist-artifacts/polylib-polylib-[0-9]*.tgz /tmp/bun-consumers/tarballs/
-            wasm_file=$(basename /tmp/bun-consumers/tarballs/polylib-polylib-wasm-*.tgz)
-            js_file=$(basename /tmp/bun-consumers/tarballs/polylib-polylib-js-*.tgz)
-            ts_file=$(basename /tmp/bun-consumers/tarballs/polylib-polylib-[0-9]*.tgz)
-            cd /tmp/bun-consumers/native
-            # The manifest is written by the shell rather than by Bun: `bun -e`
-            # only gained top-level await later, and `process.argv` differs
-            # between Bun releases, so neither is portable across the matrix.
-            cat > package.json <<JSON
-            {
-              "name": "bun-consumer-native",
-              "type": "module",
-              "dependencies": {
-                "@polylib/polylib": "file:../tarballs/${ts_file}",
-                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
-                "@polylib/polylib-js": "file:../tarballs/${js_file}"
-              },
-              "overrides": {
-                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
-                "@polylib/polylib-js": "file:../tarballs/${js_file}"
-              }
-            }
-            JSON
-            # `bun install --offline` only exists from Bun 1.4.1 onwards; every
-            # dependency here is a local `file:` tarball, so the older Bun
-            # releases install them without touching the network anyway.
-            if bun install --help 2>&1 | grep -q -- '--offline'; then
-              bun install --offline
-            else
-              bun install
-            fi
-            bun -e '
-              import * as facade from "@polylib/polylib";
-              import * as facadeWasm from "@polylib/polylib/wasm";
-              import * as wasmPkg from "@polylib/polylib-wasm";
-              import * as napiPkg from "@polylib/polylib-js";
-              if (facade.BACKEND !== "native" || facade.getEngineVersion() !== facade.VERSION) throw new Error("facade mismatch");
-              if (facade.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade slug mismatch");
-              if (facadeWasm.BACKEND !== "wasm" || facadeWasm.normalizeSlug("Hello Bun!") !== "hello-bun") throw new Error("facade/wasm mismatch");
-              if (wasmPkg.getWasmVersion() !== wasmPkg.VERSION) throw new Error("wasm version mismatch");
-              if (napiPkg.getNativeVersion() !== napiPkg.VERSION) throw new Error("napi version mismatch");
-              const s = facade.summarizeScores([10, 20, 30]);
-              if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
-            '
-            cd /tmp/bun-consumers/wasm
-            cat > package.json <<JSON
-            {
-              "name": "bun-consumer-wasm",
-              "type": "module",
-              "dependencies": {
-                "@polylib/polylib": "file:../tarballs/${ts_file}",
-                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
-              },
-              "overrides": {
-                "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
-              }
-            }
-            JSON
-            if bun install --help 2>&1 | grep -q -- '--offline'; then
-              bun install --offline --omit=optional
-            else
-              bun install --omit=optional
-            fi
-            bun -e '
-              import * as facade from "@polylib/polylib";
-              if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
-            '
+            pixi run -e js tools run ts consumers --runner bun \
+              --tarball-dir dist-artifacts \
+              --platform-dir dist-artifacts/napi
 
   uniffi-kotlin-ruby:
     name: UniFFI Bindings (Kotlin JVM & Ruby)
