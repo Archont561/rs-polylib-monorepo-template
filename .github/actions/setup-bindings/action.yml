@@ -18,20 +18,35 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # A container job runs on Alpine, where the glibc pixi binary that
+    # `setup-pixi` installs cannot execute, so only the host path sets it up.
     - name: Setup Rust + Python + Bun full environment
+      if: inputs.container == ''
       uses: ./.github/actions/setup-rust
       with:
         environment: full
         install-bun: "true"
         cache-key: ${{ inputs.cache-key }}
 
-    - name: Install musl build tools
+    # The container has no pixi, so every tool the build and the staging task
+    # need is installed here instead: a Rust toolchain at the workspace's
+    # `rust-version`, Node.js and npm for `bun pm pack`'s job, and the task
+    # runner itself. `GITHUB_PATH` only affects later steps, which is why the
+    # compile is its own step.
+    - name: Install the musl toolchain
       if: inputs.container != ''
       shell: sh
-      run: apk add --no-cache musl-dev perl make
+      run: |
+        set -eux
+        apk add --no-cache musl-dev perl make gcc g++ curl git nodejs npm python3 py3-pip
+        curl -fsSL https://sh.rustup.rs \
+          | sh -s -- -y --profile minimal --default-toolchain 1.88
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        pip3 install --break-system-packages --quiet tasknest==0.4.0 jinja2
+        python3 -c "import tasknest"
 
     - name: Build PyO3, wasm-bindgen, and NAPI-RS artifacts
-      if: inputs.napi-target == ''
+      if: inputs.napi-target == '' && inputs.container == ''
       shell: bash
       run: pixi run -e full tools run bindings build
 
@@ -39,10 +54,22 @@ runs:
     # the whole set, which is what the shared job wants and what this one must
     # not do: it would build seven targets that cannot run on this host.
     - name: Compile the NAPI-RS addon for one target
-      if: inputs.napi-target != ''
+      if: inputs.napi-target != '' && inputs.container == ''
       shell: bash
       env:
         NAPI_TARGET: ${{ inputs.napi-target }}
       run: |
         pixi run -e full cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
         pixi run -e full tools run bindings build --target ts
+
+    # Inside the musl container there is no pixi, so the same two commands run
+    # against the rustup and npm toolchains installed above.
+    - name: Compile the NAPI-RS addon inside the musl container
+      if: inputs.napi-target != '' && inputs.container != ''
+      shell: sh
+      env:
+        NAPI_TARGET: ${{ inputs.napi-target }}
+      run: |
+        set -eux
+        cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
+        cd packages/polylib-js && napi build --release --target "$NAPI_TARGET"

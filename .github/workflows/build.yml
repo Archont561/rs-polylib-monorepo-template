@@ -188,6 +188,11 @@ jobs:
   build-napi-platforms:
     name: Build NAPI addon (${{ matrix.suffix }})
     runs-on: ${{ matrix.runner }}
+    # A musl target has to be compiled in a musl userland. Passing the image name
+    # to the action as an input is not enough: without a job-level `container`,
+    # the steps still run on the glibc runner, where `apk` does not exist and the
+    # glibc-linked pixi binary cannot install a musl toolchain.
+    container: ${{ matrix.container || null }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -249,8 +254,31 @@ jobs:
           napi-target: ${{ matrix.target }}
           container: ${{ matrix.container }}
 
-      - name: Stage the per-platform package
-        run: pixi run -e full tools run bindings stage_napi --suffix ${{ matrix.suffix }}
+      # `stage_napi` assembles `packages/polylib-js/npm/<suffix>/`; a tarball is
+      # what the upload and the `build-npm` job both consume, so this step packs
+      # one too. `bun pm pack` is what `release pack` uses.
+      - name: Stage and pack the per-platform package
+        if: matrix.container == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          pixi run -e full tools run bindings stage_napi --suffix ${{ matrix.suffix }}
+          mkdir -p "dist-artifacts/napi/${{ matrix.suffix }}"
+          pixi run -e full bun pm pack \
+            --cwd "packages/polylib-js/npm/${{ matrix.suffix }}" \
+            --destination "$PWD/dist-artifacts/napi/${{ matrix.suffix }}"
+
+      - name: Stage and pack the per-platform package (musl container)
+        if: matrix.container != ''
+        shell: sh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -eux
+          mkdir -p "dist-artifacts/napi/${{ matrix.suffix }}"
+          python3 -B -m tasknest run bindings stage_napi --suffix ${{ matrix.suffix }}
+          cd "packages/polylib-js/npm/${{ matrix.suffix }}"
+          npm pack --pack-destination "$GITHUB_WORKSPACE/dist-artifacts/napi/${{ matrix.suffix }}"
 
       - name: Upload the per-platform package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
