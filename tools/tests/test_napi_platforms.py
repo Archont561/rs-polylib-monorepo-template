@@ -224,7 +224,7 @@ def test_a_correct_peer_declaration_passes() -> None:
     assert verify_facade_peer_declaration(_facade_manifest()) == []
 
 
-@pytest.mark.parametrize("key", ["dependencies", "optionalDependencies", "devDependencies"])
+@pytest.mark.parametrize("key", ["dependencies", "optionalDependencies"])
 def test_a_hard_dependency_on_wasm_is_rejected(key: str) -> None:
     """Only an optional peer keeps the package out of a server install."""
     manifest = _facade_manifest(**{key: {"@polylib/polylib-wasm": "~0.1.0"}})
@@ -270,3 +270,9 @@ def test_the_typescript_loader_agrees_with_this_table() -> None:
         assert f'"{triple}": "{suffix}"' in text, (
             f"{triple} -> {suffix} is missing from bunup.config.ts"
         )
+
+
+def test_a_dev_dependency_on_wasm_is_allowed() -> None:
+    """npm never installs a dependency's devDependencies, so carrying one is fine."""
+    manifest = _facade_manifest(devDependencies={"@polylib/polylib-wasm": "0.1.0"})
+    assert verify_facade_peer_declaration(manifest) == []
