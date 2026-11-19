@@ -104,8 +104,21 @@ runs:
         # A failing cargo reports the reason on its last lines, and this job's
         # log is only readable from outside the workflow. Promote them to
         # annotations, which the checks API reports as soon as the step fails.
-        if ! cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked 2>&1 | tee cargo.log; then
-          tail -n 25 cargo.log | while IFS= read -r line; do echo "::error::$line"; done
-          exit 1
+        # `PIPESTATUS` is what makes the exit status survive the `tee`, and the
+        # status alone separates a linker error from a process that was killed.
+        set +e
+        cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked 2>&1 | tee cargo.log
+        status=${PIPESTATUS[0]}
+        set -e
+        if [ "$status" -ne 0 ]; then
+          echo "cargo build exited with status $status"
+          # Colour codes make an annotation unreadable, and the checks API
+          # keeps only the first ten per step, so send just the lines that name
+          # the failure rather than a window that might miss them.
+          strip=$(sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' cargo.log)
+          errors=$(printf '%s\n' "$strip" | grep -E '^(error|warning: unused|  = note)' | tail -n 6)
+          annotations=${errors:-$(printf '%s\n' "$strip" | tail -n 6)}
+          printf '%s\n' "$annotations" | while IFS= read -r line; do echo "::error::$line"; done
+          exit "$status"
         fi
         pixi run -e full tools run bindings build --target ts
