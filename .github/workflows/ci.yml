@@ -198,7 +198,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          suffix=$(python3 -c "from tools._lib.napi_platforms import host_suffix; print(host_suffix())")
+          # Resolved through the pixi environment like every other task call: the
+          # system interpreter has neither `tasknest` nor this package on its path.
+          suffix=$(pixi run -e full python -c \
+            "from tools._lib.napi_platforms import host_suffix; print(host_suffix())")
           echo "NAPI_SUFFIX=$suffix" >> "$GITHUB_ENV"
           pixi run -e full tools run bindings stage_napi --suffix "$suffix"
           mkdir -p "$GITHUB_WORKSPACE/dist-artifacts/napi/$suffix"
