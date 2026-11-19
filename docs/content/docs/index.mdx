@@ -14,7 +14,7 @@ Polylib is a polyglot library monorepo template where deterministic core logic l
 
 - **Rust**: `crates/polylib` public metacrate facade with additive feature flags (`serde`, `json`, `full`).
 - **Python**: `packages/polylib-py` built via `PyO3` (`abi3-py310`) and `maturin`.
-- **TypeScript (Unified Facade)**: `packages/polylib-ts` (`@polylib/polylib`) automatically selects native NAPI-RS on Node.js and Bun with WebAssembly fallback, plus explicit `/native`, `/wasm`, and `browser` entrypoints.
+- **TypeScript (Facade)**: `packages/polylib-ts` (`@polylib/polylib`) resolves its main entry to the native NAPI-RS addon on Node.js and Bun, with WebAssembly behind the explicit `/wasm` subpath and a browser stub that fails rather than silently changing backend.
 - **TypeScript (WASM)**: `packages/polylib-wasm` (`@polylib/polylib-wasm`) built via `crates/polylib-wasm` (`wasm-bindgen`) and `bunup` for Browser, Edge, Bun, and Node.js.
 - **TypeScript (NAPI-RS)**: `packages/polylib-js` (`@polylib/polylib-js`) built via `crates/polylib-js` (`napi-rs` / Node-API v9) and `bunup` for native Node.js and Bun addons without WebAssembly.
 - **Kotlin (JVM)**: `packages/polylib-kt` generated from `crates/polylib-ffi` via `UniFFI`, built with Gradle and JNA, and verified with JUnit 5 and Cucumber-JVM.
@@ -36,7 +36,7 @@ Unified `tox.ini` environments (labels `python`, `npm`, `rust`, `ffi`, `compat`,
 
 - **Rust (`-m rust`)**: `rust-features`, `rust-packages`, `rust-consumer`, and `rust-compat` (`tools run rust tox`), plus Rust MSRV (`rust-version = "1.88"`) and stable CI verification.
 - **Python (`-m python`)**: `py{310,311,312,313,314}-core` (wheel) and `sdist` environments verifying `pytest`, shared Gherkin conformance, and `importlib.metadata` constraints (`tools run python tox`, Python 3.10–3.14 on CI).
-- **npm and TypeScript (`-m npm`)**: `npm-pack`, `npm-bun`, `npm-node`, `npm-types`, and `npm-compat` (`tools run ts tox`) verify `publint --strict`, `attw`, native and WASM fallback installs, and strict `tsc` (`nodenext` and `bundler`). CI tests Node.js 20, 22, and 24 plus Bun 1.1, 1.4, and latest.
+- **npm and TypeScript (`-m npm`)**: `npm-pack`, `npm-bun`, `npm-node`, `npm-types`, and `npm-compat` (`tools run ts tox`) verify `publint --strict`, `attw`, server-only, server+wasm, CommonJS `require`, browser-bundle, and missing-native installs, plus strict `tsc` (`nodenext` and `bundler`). CI tests Node.js 20, 22, and 24 plus Bun 1.1, 1.4, and latest on Ubuntu, and a `server-only` / `cjs-require` matrix across Linux, macOS, Windows, and musl.
 - **Kotlin and JVM (`-m ffi`)**: `kotlin-compat` builds a JVM 17-compatible JAR and Maven POM, then runs a standalone JVM consumer without `-Djna.library.path` (`tools run ffi tox --env kotlin-compat`). CI tests JDK 17, 21, and 25.
 - **Ruby (`-m ffi`)**: `ruby-compat` packs `.gem` and smoke-tests an isolated `GEM_HOME` (`tools run ffi tox --env ruby-compat`). CI tests Ruby 3.2, 3.3, and 3.4.
 - **Swift (`-m ffi`)**: `swift-compat` verifies SwiftPM artifacts and runs C-ABI link smoke on Linux or full `swift test` when Swift is present (`tools run ffi tox --env swift-compat`). CI tests macOS 15 and Linux Swift 6.1.

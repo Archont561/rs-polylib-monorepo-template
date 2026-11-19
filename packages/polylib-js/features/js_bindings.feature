@@ -22,5 +22,6 @@ Feature: TypeScript NAPI-RS native bindings for polylib-core
 
   Scenario: Only the matching platform package is installed
     Given the published @polylib/polylib-js manifest
+    When a consumer installs @polylib/polylib-js
     Then it declares one optional dependency per napi target at an exact version
     And the main tarball ships no compiled .node addon
