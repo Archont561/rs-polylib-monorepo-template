@@ -400,7 +400,10 @@ jobs:
           set -euo pipefail
           suffix=$(pixi run -e full python -c \
             "from tools._lib.napi_platforms import host_suffix; print(host_suffix())")
-          if ls dist-artifacts/napi/"$suffix"/*.tgz >/dev/null 2>&1; then
+          # `merge-multiple` flattens every `napi-*` artifact into one directory,
+          # so the tarball is directly under `dist-artifacts/napi`, not under a
+          # per-suffix subdirectory.
+          if ls dist-artifacts/napi/polylib-polylib-js-"$suffix"-*.tgz >/dev/null 2>&1; then
             echo "Using the published $suffix package."
             exit 0
           fi
@@ -411,10 +414,9 @@ jobs:
           # cannot run here.
           pixi run -e full bun run --cwd packages/polylib-js build:native
           pixi run -e full tools run bindings stage_napi --suffix "$suffix"
-          mkdir -p "dist-artifacts/napi/$suffix"
           pixi run -e full bun pm pack \
             --cwd "packages/polylib-js/npm/$suffix" \
-            --destination "$PWD/dist-artifacts/napi/$suffix"
+            --destination "$PWD/dist-artifacts/napi"
 
       - name: Install tarballs and run the consumer fixtures
         shell: bash
@@ -488,11 +490,11 @@ jobs:
           suffix=linux-x64-musl
           cp "target/x86_64-unknown-linux-musl/release/libpolylib_js.so" \
             "packages/polylib-js/polylib.$suffix.node"
+          mkdir -p dist-artifacts/napi
           pixi run -e full tools run bindings stage_napi --suffix "$suffix"
-          mkdir -p "dist-artifacts/napi/$suffix"
           pixi run -e full bun pm pack \
             --cwd "packages/polylib-js/npm/$suffix" \
-            --destination "$PWD/dist-artifacts/napi/$suffix"
+            --destination "$PWD/dist-artifacts/napi"
           sudo umount "$root$GITHUB_WORKSPACE"
 
       - name: Report which libc the addon is loaded by
