@@ -79,7 +79,7 @@ real artifact and consumes it as a user would.
 | :--- | :--- | :--- | :--- | :--- |
 | **Rust** | `polylib` (metacrate) + `polylib-core` | [`crates/polylib`](crates/polylib/README.md), [`crates/polylib-core`](crates/polylib-core/README.md) | Cargo (`edition = "2024"`, `resolver = "3"`) | `rust compat` (feature matrix, `cargo package --list`, unpacked `.crate` consumer, MSRV) |
 | **Python** | `polylib` (`cp310-abi3` wheels) | [`packages/polylib-py`](packages/polylib-py/README.md) + [`crates/polylib-py`](crates/polylib-py/README.md) | `PyO3` + `maturin` | `python compat` (wheel/sdist, `METADATA`, isolated venv) + `tox` (Python 3.10–3.14) |
-| **TypeScript (facade)** | `@polylib/polylib` (ESM facade) | [`packages/polylib-ts`](packages/polylib-ts/README.md) | `bunup` (native entry, `/wasm` opt-in subpath, browser stub) | `ts compat` (`publint --strict`, `attw`, server-only / server+wasm / CJS / browser consumers) |
+| **TypeScript (facade)** | `@polylib/polylib` (ESM facade) | [`packages/polylib-ts`](packages/polylib-ts/README.md) | `bunup` (native entry, `/wasm` opt-in subpath, browser stub) | `ts compat` (`publint --strict`, `attw`, server-only, server+WASM, CommonJS, and browser consumers) |
 | **TypeScript (WASM)** | `@polylib/polylib-wasm` (ESM + `.wasm`) | [`packages/polylib-wasm`](packages/polylib-wasm/README.md) + [`crates/polylib-wasm`](crates/polylib-wasm/README.md) | `wasm-bindgen` + `bunup` | `ts compat` (`publint --strict`, `attw`, isolated consumer) + Bun & Node.js matrices |
 | **TypeScript (NAPI-RS)** | `@polylib/polylib-js` + 8 per-platform packages | [`packages/polylib-js`](packages/polylib-js/README.md) + [`crates/polylib-js`](crates/polylib-js/README.md) | `napi-rs` + `bunup` | `ts compat` (`publint --strict`, `attw`, isolated consumer) + 8-target build matrix |
 | **Kotlin (JVM)** | `dev.polylib:polylib` (JAR + JNA) | [`packages/polylib-kt`](packages/polylib-kt/README.md) + [`crates/polylib-ffi`](crates/polylib-ffi/README.md) | `UniFFI` + Gradle + JNA | `ffi compat --target kotlin` (Gradle `check` + JAR native verification + Cucumber-JVM) |
@@ -90,8 +90,8 @@ The three TypeScript rows are one ecosystem with three delivery shapes. The
 facade's main entry is native and imports the addon statically; WebAssembly is an
 explicit `@polylib/polylib/wasm` opt-in behind an optional peer, and a browser
 bundler resolves the main entry to a stub that throws rather than shipping an
-addon call that cannot work. The two direct packages are for consumers who want
-to choose the backend themselves.
+addon call that can't work. The two direct packages are for consumers who want
+to choose the engine themselves.
 
 ## Workspace layout
 
