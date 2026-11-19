@@ -336,6 +336,16 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      # The fixture runner is a pixi task, and this job needs the Node.js that
+      # `setup-node` just installed rather than a second one from the pixi
+      # environment, so only Pixi is set up here. The fixtures bring their own
+      # dependencies, so the workspace install is skipped too.
+      - name: Setup Pixi for the consumer harness
+        uses: ./.github/actions/setup
+        with:
+          environment: full
+          install-bun: "false"
+
       - name: Download packed TypeScript tarballs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
