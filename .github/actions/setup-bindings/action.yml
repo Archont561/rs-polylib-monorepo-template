@@ -36,11 +36,16 @@ runs:
     - name: Install the musl toolchain
       if: inputs.container != ''
       shell: sh
+      env:
+        NAPI_TARGET: ${{ inputs.napi-target }}
       run: |
         set -eux
         apk add --no-cache musl-dev perl make gcc g++ curl git nodejs npm python3 py3-pip
+        # `--default-toolchain 1.88` installs only the host target; a
+        # `cargo build --target` needs that target's std as well, and cargo
+        # otherwise exits 101 with a "may not be installed" note.
         curl -fsSL https://sh.rustup.rs \
-          | sh -s -- -y --profile minimal --default-toolchain 1.88
+          | sh -s -- -y --profile minimal --default-toolchain 1.88 --target "$NAPI_TARGET"
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
         pip3 install --break-system-packages --quiet tasknest==0.4.0 jinja2
         python3 -c "import tasknest"
@@ -62,8 +67,9 @@ runs:
         pixi run -e full cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
         pixi run -e full tools run bindings build --target ts
 
-    # Inside the musl container there is no pixi, so the same two commands run
-    # against the rustup and npm toolchains installed above.
+    # Inside the musl container there is no pixi, so the compile runs against the
+    # rustup toolchain installed above. `napi build` is not needed: `stage_napi`
+    # reads the cdylib cargo produces and gives it the napi name itself.
     - name: Compile the NAPI-RS addon inside the musl container
       if: inputs.napi-target != '' && inputs.container != ''
       shell: sh
@@ -72,4 +78,3 @@ runs:
       run: |
         set -eux
         cargo build --release --target "$NAPI_TARGET" -p polylib-js --locked
-        cd packages/polylib-js && napi build --release --target "$NAPI_TARGET"
