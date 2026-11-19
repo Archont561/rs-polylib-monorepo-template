@@ -13,7 +13,11 @@ import shutil
 
 from tasknest import ToolContext, ToolError, tool
 
-from tools._lib.napi_platforms import load_targets, platform_manifest
+from tools._lib.napi_platforms import (
+    load_targets,
+    platform_manifest,
+    verify_platform_package,
+)
 
 _PACKAGES_DIR = "packages"
 _PKG_DIR = "polylib-js"
@@ -55,4 +59,7 @@ def stage_napi_platform(ctx: ToolContext, suffix: str = "") -> None:
     version = str(base["version"])
     manifest = platform_manifest(base, name=target.package_name, suffix=suffix, version=version)
     (package_dir / _MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding=_UTF8)
+    problems = verify_platform_package(package_dir)
+    if problems:
+        raise ToolError("The staged package does not match its target:\n  " + "\n  ".join(problems))
     print(f"Staged {target.package_name}@{version} in {package_dir.relative_to(ctx.repo_root)}")

@@ -128,6 +128,10 @@ _EXTENSION_CONTAINERS: dict[str, frozenset[str]] = {
     ".pyd": frozenset({"pe"}),
     ".dylib": frozenset({"macho"}),
     ".dll": frozenset({"pe"}),
+    # A Node addon is a shared library under another name: ELF on Linux, Mach-O
+    # on macOS, PE on Windows. The per-platform npm package name says which, so a
+    # payload that disagrees with it installs on the wrong platform.
+    ".node": frozenset({"elf", "macho", "pe"}),
 }
 # A wheel's extension module must be importable, which rules out a bare dylib.
 _UNIMPORTABLE_WHEEL_SUFFIXES: frozenset[str] = frozenset({".dylib", ".dll"})

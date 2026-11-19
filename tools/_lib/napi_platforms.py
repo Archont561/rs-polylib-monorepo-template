@@ -252,9 +252,77 @@ def _check_platform_manifest(
     addons = sorted(package_dir.glob("*.node"))
     if len(addons) != 1:
         problems.append(f"{suffix}: ships {len(addons)} .node file(s), expected exactly 1")
-    elif addons[0].name != f"polylib.{suffix}.node":
+        return problems
+    if addons[0].name != f"polylib.{suffix}.node":
         problems.append(f"{suffix}: addon is {addons[0].name}, expected polylib.{suffix}.node")
+    problems.extend(_check_addon_payload(addons[0], target))
     return problems
+
+
+def _expected_container(target: PlatformTarget) -> str:
+    """The binary format the addon must be in for `target`."""
+    if target.suffix.startswith("win32-"):
+        return "pe"
+    if target.suffix.startswith("darwin-"):
+        return "macho"
+    return "elf"
+
+
+def _check_addon_payload(addon: Path, target: PlatformTarget) -> list[str]:
+    """Check the addon's container and architecture match the package name.
+
+    A build that cross-compiled with the wrong toolchain can put an aarch64
+    payload in an x64 package. The manifest then installs it on x64 hosts, where
+    it fails at `require` time — after the release. Reading the header costs a
+    few bytes and catches that before publishing.
+    """
+    from tools._lib.binary_arch import read_file_payload_arch
+
+    try:
+        payload = read_file_payload_arch(addon)
+    except OSError as err:
+        return [f"{target.suffix}: cannot read {addon.name}: {err}"]
+    if not payload.is_known:
+        # An unreadable header is not a "cannot tell" case: `.node` is always a
+        # shared library, so anything else is a broken build or the wrong file.
+        return [f"{target.suffix}: {addon.name} is not an ELF, Mach-O, or PE binary"]
+    problems: list[str] = []
+    expected_container = _expected_container(target)
+    if payload.container != expected_container:
+        problems.append(
+            f"{target.suffix}: addon is {payload.container}, expected {expected_container}"
+        )
+    expected_arch = "aarch64" if "-arm64" in target.suffix else "x86_64"
+    if payload.arch != expected_arch:
+        problems.append(
+            f"{target.suffix}: addon is {payload.arch}, expected {expected_arch} ({payload.detail})"
+        )
+    return problems
+
+
+def verify_platform_package(package_dir: Path) -> list[str]:
+    """Check one staged per-platform package against its own directory name.
+
+    A CI runner compiles a single target, so it can only verify that one; the
+    full set is checked where all of them are present.
+    """
+    manifest_file = package_dir / _MANIFEST
+    if not manifest_file.is_file():
+        return [f"{package_dir.name}: no {_MANIFEST}"]
+    suffix = package_dir.name
+    target = _target_for_suffix(suffix)
+    if target is None:
+        return [f"{suffix}: no matching napi target"]
+    data = json.loads(manifest_file.read_text(encoding=_UTF8))
+    return _check_platform_manifest(package_dir, data, target)
+
+
+def _target_for_suffix(suffix: str) -> PlatformTarget | None:
+    """Look up a target by suffix, independent of any manifest."""
+    for target in PLATFORM_TARGETS:
+        if target.suffix == suffix:
+            return target
+    return None
 
 
 def verify_platform_packages(pkg_dir: Path, *, npm_dir: Path | None = None) -> list[str]:
