@@ -361,7 +361,11 @@ def verify_facade_peer_declaration(facade_manifest: dict[str, object]) -> list[s
     rather than a failed release.
     """
     problems: list[str] = []
-    for key in ("dependencies", "optionalDependencies", "devDependencies"):
+    # Only the keys npm acts on for an installed package. `devDependencies` is
+    # carried in the packed manifest but never installed for a dependency, so it
+    # is not a concern; `dependencies` and `optionalDependencies` are what would
+    # make npm fetch the package for every consumer.
+    for key in ("dependencies", "optionalDependencies"):
         declared = facade_manifest.get(key) or {}
         if isinstance(declared, dict) and _WASM_PKG in declared:
             problems.append(f"{key} must not declare {_WASM_PKG}; it belongs in peerDependencies")

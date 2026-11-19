@@ -303,16 +303,34 @@ jobs:
           tox -e "$TOX_ENV"
 
   node-versions:
-    name: Node.js ESM+WASM+NAPI Compatibility (Node ${{ matrix.node-version }})
+    name: Node.js Compatibility (${{ matrix.os }} / Node ${{ matrix.node-version }})
     needs: [changes, polyglot-bindings]
     if: github.event_name != 'push' && needs.changes.outputs.js == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["20", "22", "24"]
+        include:
+          # The full case set runs on Ubuntu; one Node version per case set keeps
+          # the matrix bounded while still covering 20, 22, and 24.
+          - { os: ubuntu-latest, node-version: "20", cases: all }
+          - { os: ubuntu-latest, node-version: "22", cases: all }
+          - { os: ubuntu-latest, node-version: "24", cases: all }
+          # `server-only` and `cjs-require` are the two cases that can differ per
+          # platform: one loads a compiled addon, the other requires it through
+          # CommonJS. A musl host and an arm64 Windows host each exercise a
+          # different platform package.
+          - { os: ubuntu-24.04-arm, node-version: "22", cases: native }
+          - { os: macos-15, node-version: "22", cases: native }
+          - { os: windows-latest, node-version: "22", cases: native }
+          - { os: windows-11-arm, node-version: "22", cases: native }
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -324,73 +342,61 @@ jobs:
           name: polylib-ts-tarballs
           path: dist-artifacts
 
-      - name: Install tarballs and verify native + WASM-fallback in Node.js
+      - name: Download the addon package for this host
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: napi-*
+          path: dist-artifacts/napi
+          merge-multiple: true
+
+      - name: Install tarballs and run the consumer fixtures
+        shell: bash
         run: |
-          # The tarballs are copied next to the consumer directories and
-          # referenced with paths that are relative to the consumer. An
-          # absolute `file:` reference is ambiguous: npm and Bun read a
-          # Windows drive letter as a URL host and then cannot find the
-          # tarball. The consumer stays outside the repository so that the
-          # monorepo workspace root is never picked up.
-          mkdir -p /tmp/node-consumers/tarballs /tmp/node-consumers/native /tmp/node-consumers/wasm
-          cp dist-artifacts/polylib-polylib-wasm-*.tgz /tmp/node-consumers/tarballs/
-          cp dist-artifacts/polylib-polylib-js-*.tgz /tmp/node-consumers/tarballs/
-          cp dist-artifacts/polylib-polylib-[0-9]*.tgz /tmp/node-consumers/tarballs/
-          wasm_file=$(basename /tmp/node-consumers/tarballs/polylib-polylib-wasm-*.tgz)
-          js_file=$(basename /tmp/node-consumers/tarballs/polylib-polylib-js-*.tgz)
-          ts_file=$(basename /tmp/node-consumers/tarballs/polylib-polylib-[0-9]*.tgz)
-          cd /tmp/node-consumers/native
-          cat > package.json <<JSON
-          {
-            "name": "node-consumer-native",
-            "type": "module",
-            "dependencies": {
-              "@polylib/polylib": "file:../tarballs/${ts_file}",
-              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
-              "@polylib/polylib-js": "file:../tarballs/${js_file}"
-            },
-            "overrides": {
-              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}",
-              "@polylib/polylib-js": "file:../tarballs/${js_file}"
-            }
-          }
-          JSON
-          npm install --no-save --no-audit --no-fund
-          node --input-type=module -e '
-            import { createRequire } from "node:module";
-            import * as facade from "@polylib/polylib";
-            import * as facadeWasm from "@polylib/polylib/wasm";
-            import * as wasmPkg from "@polylib/polylib-wasm";
-            import * as napiPkg from "@polylib/polylib-js";
-            const pkg = createRequire(import.meta.url)("@polylib/polylib/package.json");
-            if (pkg.name !== "@polylib/polylib") throw new Error("pkg mismatch");
-            if (facade.BACKEND !== "native" || facade.getEngineVersion() !== facade.VERSION) throw new Error("facade mismatch");
-            if (facade.normalizeSlug("Hello Node!") !== "hello-node") throw new Error("facade slug mismatch");
-            if (facadeWasm.BACKEND !== "wasm" || facadeWasm.normalizeSlug("Hello Node!") !== "hello-node") throw new Error("facade/wasm mismatch");
-            if (wasmPkg.getWasmVersion() !== wasmPkg.VERSION) throw new Error("wasm version mismatch");
-            if (napiPkg.getNativeVersion() !== napiPkg.VERSION) throw new Error("napi version mismatch");
-            const s = facade.summarizeScores([10, 20, 30]);
-            if (s.count !== 3 || s.mean !== 20) throw new Error("summary mismatch");
-          '
-          cd /tmp/node-consumers/wasm
-          cat > package.json <<JSON
-          {
-            "name": "node-consumer-wasm",
-            "type": "module",
-            "dependencies": {
-              "@polylib/polylib": "file:../tarballs/${ts_file}",
-              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
-            },
-            "overrides": {
-              "@polylib/polylib-wasm": "file:../tarballs/${wasm_file}"
-            }
-          }
-          JSON
-          npm install --no-save --omit=optional --no-audit --no-fund
-          node --input-type=module -e '
-            import * as facade from "@polylib/polylib";
-            if (facade.BACKEND !== "wasm" || facade.normalizeSlug("Fallback!") !== "fallback") throw new Error("wasm fallback mismatch");
-          '
+          pixi run -e js tools run ts consumers \
+            --tarball-dir dist-artifacts \
+            --platform-dir dist-artifacts/napi \
+            --cases "${{ matrix.cases }}"
+
+  node-musl:
+    name: Node.js Compatibility (Alpine / musl)
+    needs: [changes, polyglot-bindings]
+    if: github.event_name != 'push' && needs.changes.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: node:22-alpine
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the toolchain
+        run: |
+          apk add --no-cache python3 py3-pip git bash
+          python3 -m pip install --break-system-packages --quiet tasknest
+
+      - name: Download packed TypeScript tarballs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: polylib-ts-tarballs
+          path: dist-artifacts
+
+      - name: Download the musl addon package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: napi-linux-x64-musl
+          path: dist-artifacts/napi
+          merge-multiple: true
+
+      - name: Run the native consumer fixtures on musl
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python3 -B -m tasknest run ts consumers \
+            --tarball-dir dist-artifacts \
+            --platform-dir dist-artifacts/napi \
+            --cases native
 
   bun-versions:
     name: Bun Compatibility (Bun ${{ matrix.bun-version }})
