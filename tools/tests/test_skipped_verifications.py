@@ -88,14 +88,18 @@ def test_kotlin_standalone_skips_without_a_jdk(tmp_path: Path, no_toolchains: No
 
 def test_node_consumers_return_a_skip_when_absent(no_toolchains: None) -> None:
     """Site 6: the return value carries the skip instead of being discarded."""
-    result = compat_ts_node.verify_node_consumers(Path(), {}, require_node=False)
+    result = compat_ts_node.verify_node_consumers(
+        Path(), compat_ts_node.ConsumerSetup(tarballs={}, platform_packages={}), require_node=False
+    )
     assert result.status is Status.SKIPPED
     assert "node" in (result.reason or "")
 
 
 def test_node_consumers_fail_when_node_is_required(no_toolchains: None) -> None:
     """Site 6: `--mode node` makes an absent Node.js a failure."""
-    result = compat_ts_node.verify_node_consumers(Path(), {}, require_node=True)
+    result = compat_ts_node.verify_node_consumers(
+        Path(), compat_ts_node.ConsumerSetup(tarballs={}, platform_packages={}), require_node=True
+    )
     assert result.status is Status.FAILED
 
 

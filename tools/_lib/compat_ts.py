@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from tools._lib.compat_ts_node import verify_node_consumers
+from tools._lib.compat_ts_node import ConsumerSetup, verify_node_consumers
 from tools._lib.program import resolve_program
 from tools._lib.status import (
     CheckResult,
@@ -331,6 +331,48 @@ def _verify_bun_and_types(
         _check_consumer_runtime_and_types(root, consumer_dir, run_bun=run_bun, run_types=run_types)
 
 
+def _host_platform_tarballs(tmp_path: Path) -> dict[str, Path]:
+    """Pack the per-platform addon package this host would install.
+
+    `napi artifacts` drops the compiled addon into `packages/polylib-js/npm/<suffix>/`.
+    A `file:` dependency cannot reach that directory through
+    `optionalDependencies`, so the consumer fixture installs it by name and this
+    helper hands it the matching tarball. When the addon was never built (no
+    Rust toolchain) the mapping is empty and the loader's own error path is what
+    the `missing-native` fixture exercises.
+    """
+    from tools._lib.napi_platforms import host_suffix
+
+    npm_dir = Path("packages/polylib-js/npm")
+    if not npm_dir.is_dir():
+        return {}
+    suffix = host_suffix()
+    target_dir = npm_dir / suffix
+    if not (target_dir / _PACKAGE_JSON).is_file():
+        return {}
+    packed = _pack_dir_tarball(target_dir, tmp_path)
+    return {f"{_JS_PKG}-{suffix}": packed}
+
+
+def _pack_dir_tarball(package_dir: Path, tmp_path: Path) -> Path:
+    """`npm pack` one directory and return the tarball's path."""
+    npm = resolve_program("npm")
+    out_dir = tmp_path / "platform-tarballs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        (npm, "pack", str(package_dir), "--pack-destination", str(out_dir)),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"npm pack failed for {package_dir}: {proc.stderr.strip()}")
+    tarball = out_dir / proc.stdout.strip().splitlines()[-1]
+    if not tarball.is_file():
+        raise RuntimeError(f"npm pack reported {tarball.name} but it does not exist.")
+    return tarball
+
+
 def verify_ts_compat(root: Path, mode: TsCompatMode = MODE_ALL) -> list[CheckResult]:
     """Pack and verify npm tarballs (`all`, `pack`, `bun`, `node`, or `types`)."""
     if mode not in VALID_MODES:
@@ -361,7 +403,14 @@ def verify_ts_compat(root: Path, mode: TsCompatMode = MODE_ALL) -> list[CheckRes
             )
         if mode in (MODE_ALL, MODE_NODE):
             results.append(
-                verify_node_consumers(tmp_path, tarballs, require_node=(mode == MODE_NODE))
+                verify_node_consumers(
+                    tmp_path,
+                    ConsumerSetup(
+                        tarballs=tarballs,
+                        platform_packages=_host_platform_tarballs(tmp_path),
+                    ),
+                    require_node=(mode == MODE_NODE),
+                )
             )
         else:
             results.append(
