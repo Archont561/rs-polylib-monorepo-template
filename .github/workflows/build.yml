@@ -263,6 +263,17 @@ jobs:
           napi-target: ${{ matrix.target }}
           rustup-toolchain: ${{ matrix.rustup-toolchain }}
 
+      # A failed compile is the one thing this workflow cannot show: the job log
+      # is only reachable from inside GitHub. The compile leaves `cargo.log`
+      # behind, and an artifact of it can be read from anywhere.
+      - name: Upload the compile log when the build fails
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cargo-log-${{ matrix.suffix }}
+          path: cargo.log
+          if-no-files-found: ignore
+
       # `stage_napi` assembles `packages/polylib-js/npm/<suffix>/`; a tarball is
       # what the upload and the `build-npm` job both consume, so this step packs
       # one too. `bun pm pack` is what `release pack` uses.
