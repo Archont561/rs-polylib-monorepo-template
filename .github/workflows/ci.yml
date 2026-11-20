@@ -490,50 +490,38 @@ jobs:
             --cwd packages/polylib-js/npm/linux-x64-musl \
             --destination "$PWD/dist-artifacts/napi/linux-x64-musl"
 
-      # The loaded addon is a musl ELF, so the process that requires it must be a
-      # musl binary. Alpine's Node is installed with apk into its own root, which
-      # is enough to require the package without pinning a container image.
-      - name: Install the Alpine Node.js that will load the musl addon
+      # A musl ELF cannot be loaded by the host's glibc Node, so the fixtures
+      # have to run in a musl userland. `docker run node:22-alpine` is the same
+      # route `setup-bindings` already uses to compile the addon, and it is used
+      # here rather than a chroot: a chroot changes the filesystem root but not
+      # the dynamic loader, so glibc would still be the one resolving symbols and
+      # `node` would fail to start with exit 127.
+      - name: Run the native consumer fixtures against the musl addon
         shell: bash
         run: |
           set -euo pipefail
-          root="$RUNNER_TEMP/alpine"
-          mkdir -p "$root"
-          curl -fsSLo /tmp/alpine-minirootfs.tar.gz \
-            "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz"
-          sudo tar xzf /tmp/alpine-minirootfs.tar.gz -C "$root"
-          sudo cp /etc/resolv.conf "$root/etc/resolv.conf"
-          sudo chroot "$root" /sbin/apk add --no-cache nodejs npm
-          # The chroot was only a way to run `apk`. Exporting the directory
-          # through `$GITHUB_PATH` is what puts this Node ahead of the pixi one
-          # for every later step; `$GITHUB_ENV` is a host file the chroot cannot
-          # reach, and a bare `export` would not survive into the next step.
-          echo "$root/usr/bin" >> "$GITHUB_PATH"
-
-      - name: Report which libc the addon is loaded by
-        shell: bash
-        run: |
-          ldd --version | head -1 || true
-          # Prove the Node this job will use is the musl one, not the host's.
-          # A glibc-linked Node cannot load a musl addon at all, so if this is
-          # the wrong binary the fixture step fails rather than proving anything.
-          echo "node on PATH: $(command -v node)"
-          node --version
-          node -e 'const h=process.report.getReport().header; console.log("glibc runtime:", h.glibcVersionRuntime ?? "none (musl)")'
-
-      - name: Run the native consumer fixtures against the musl addon
-        shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          # The chrooted Node is what `npm` and `node` resolve to now, so the
-          # fixture installs and runs entirely inside the musl userland.
-          command -v node
-          node --version
-          python3 -B -m tasknest run ts consumers \
-            --tarball-dir dist-artifacts \
-            --platform-dir dist-artifacts/napi \
-            --cases native
+          # Stating this up front keeps the failure legible: if the addon is
+          # missing, the job says so rather than surfacing a confusing install
+          # error from inside the container.
+          ls dist-artifacts/napi/linux-x64-musl/polylib-polylib-js-linux-x64-musl-*.tgz
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/w" \
+            -w /w \
+            -e PYTHONPATH=/w \
+            node:22-alpine \
+            sh -euxc '
+              # The fixture runner is a Python module, so the container needs an
+              # interpreter and the pinned Tasknest release to import it.
+              apk add --no-cache python3
+              pip install --no-cache-dir --break-system-packages "tasknest==0.4.0"
+              node --version
+              npm --version
+              cd /w
+              python3 -B -m tasknest run ts consumers \
+                --tarball-dir dist-artifacts \
+                --platform-dir dist-artifacts/napi \
+                --cases native
+            '
 
   bun-versions:
     name: Bun Compatibility (Bun ${{ matrix.bun-version }})
