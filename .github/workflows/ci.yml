@@ -499,11 +499,12 @@ jobs:
       - name: Run the native consumer fixtures against the musl addon
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           # Stating this up front keeps the failure legible: if the addon is
           # missing, the job says so rather than surfacing a confusing install
           # error from inside the container.
           ls dist-artifacts/napi/linux-x64-musl/polylib-polylib-js-linux-x64-musl-*.tgz
+          set +e
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/w" \
             -w /w \
@@ -515,8 +516,7 @@ jobs:
               # keeps `pip` in its own package — installing `python3` alone leaves
               # it absent and the step dies on a bare `pip: not found`.
               apk add --no-cache python3 py3-pip
-              python3 -m pip install --no-cache-dir --break-system-packages \
-                "tasknest==0.4.0"
+              python3 -m pip install --no-cache-dir "tasknest==0.4.0"
               node --version
               npm --version
               cd /w
@@ -527,7 +527,18 @@ jobs:
                 --tarball-dir dist-artifacts \
                 --platform-dir dist-artifacts/napi/linux-x64-musl \
                 --cases native
-            '
+            ' 2>&1 | tee /tmp/fixtures.log
+          status="${PIPESTATUS[0]}"
+          if [ "$status" -ne 0 ]; then
+            # The job log is the real record, but a check run is easier to read
+            # from an API client than a multi-megabyte log, so the tail of the
+            # container's output is mirrored into annotations as well.
+            printf '::error::consumer fixtures exited %s\n' "$status"
+            tail -n 60 /tmp/fixtures.log | while IFS= read -r line; do
+              printf '::error::%s\n' "${line//'%'/%25}"
+            done
+            exit "$status"
+          fi
 
   bun-versions:
     name: Bun Compatibility (Bun ${{ matrix.bun-version }})
