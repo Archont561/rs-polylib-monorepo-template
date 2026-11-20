@@ -516,7 +516,11 @@ jobs:
               # keeps `pip` in its own package — installing `python3` alone leaves
               # it absent and the step dies on a bare `pip: not found`.
               apk add --no-cache python3 py3-pip
-              python3 -m pip install --no-cache-dir "tasknest==0.4.0"
+              # Alpine's Python is marked externally managed, so pip refuses a
+              # system install without this flag — the same PEP 668 guard the
+              # host Python has.
+              python3 -m pip install --no-cache-dir --break-system-packages \
+                "tasknest==0.4.0"
               node --version
               npm --version
               cd /w
