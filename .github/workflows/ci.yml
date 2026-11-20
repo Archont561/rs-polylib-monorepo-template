@@ -521,7 +521,6 @@ jobs:
           node --version
           node -e 'const h=process.report.getReport().header; console.log("glibc runtime:", h.glibcVersionRuntime ?? "none (musl)")'
 
-
       - name: Run the native consumer fixtures against the musl addon
         shell: bash
         env:
