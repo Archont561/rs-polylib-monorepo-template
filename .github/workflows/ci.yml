@@ -444,7 +444,13 @@ jobs:
   node-musl:
     name: Node.js Compatibility (musl addon on glibc host)
     needs: [changes, polyglot-bindings]
-    if: github.event_name != 'push' && needs.changes.outputs.js == 'true'
+    # This runs on every event, including a push to main. It used to exclude
+    # `push`, on the theory that `build.yml` would have produced the addon by
+    # then — but artifacts belong to the run that made them, and `download-artifact`
+    # cannot read another run's without a `run-id`. The job therefore never had
+    # an addon on any event, and reported success after skipping every step that
+    # tested one.
+    if: needs.changes.outputs.js == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -453,79 +459,107 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Pixi + Bun for the consumer harness
-        uses: ./.github/actions/setup-rust
-        with:
-          environment: full
-          install-bun: "true"
-          cache-key: ci-node-musl
-
       - name: Download packed TypeScript tarballs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: polylib-ts-tarballs
           path: dist-artifacts
 
-      - name: Download the musl addon package
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: napi-linux-x64-musl
-          path: dist-artifacts/napi
-          merge-multiple: true
-
+      # `setup-bindings` installs the same Pixi full environment and Bun
+      # workspace the rest of the job needs, so there is no separate setup step.
+      #
       # The addon is a musl ELF and this host is glibc, so `host_suffix()` would
-      # hand the fixtures the glibc package. The musl one is built by `build.yml`,
-      # which does not run on a pull request, so this job only has something to
-      # prove when that artifact exists. Compiling one here is not an option: the
-      # pixi toolchain ships no musl target and Alpine 3.20's cargo is older than
-      # the workspace's `rust-version`.
-      - name: Check for the musl addon package
-        id: musl
+      # hand the fixtures the glibc package. It has to be a musl one, and it has
+      # to be built here: `build.yml` produces one, but its artifacts belong to
+      # its own run. `setup-bindings` carries the same musl route the release
+      # build uses, so this proves that route and then proves the result loads.
+      - name: Compile the musl addon
+        uses: ./.github/actions/setup-bindings
+        with:
+          cache-key: ci-node-musl
+          napi-target: x86_64-unknown-linux-musl
+          cross-mode: musl
+
+      - name: Stage and pack the musl addon
         shell: bash
         run: |
           set -euo pipefail
-          if ls dist-artifacts/napi/polylib-polylib-js-linux-x64-musl-*.tgz >/dev/null 2>&1; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No musl addon package: it is built by build.yml, which runs on a push to main, so this job only proves itself there."
-          fi
+          pixi run -e full tools run bindings stage_napi --suffix linux-x64-musl
+          mkdir -p dist-artifacts/napi/linux-x64-musl
+          pixi run -e full bun pm pack \
+            --cwd packages/polylib-js/npm/linux-x64-musl \
+            --destination "$PWD/dist-artifacts/napi/linux-x64-musl"
 
-      # The loaded addon is a musl ELF, so the process that requires it must be a
-      # musl binary. Alpine's Node is installed with apk into its own root, which
-      # is enough to require the package without pinning a container image.
-      - name: Install the Alpine Node.js that will load the musl addon
-        if: steps.musl.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          root="$RUNNER_TEMP/alpine"
-          mkdir -p "$root"
-          curl -fsSLo /tmp/alpine-minirootfs.tar.gz \
-            "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz"
-          sudo tar xzf /tmp/alpine-minirootfs.tar.gz -C "$root"
-          sudo cp /etc/resolv.conf "$root/etc/resolv.conf"
-          sudo chroot "$root" /sbin/apk add --no-cache nodejs npm
-          echo "$root/usr/bin" >> "$GITHUB_PATH"
-
-      - name: Report which libc the addon is loaded by
-        if: steps.musl.outputs.present == 'true'
-        shell: bash
-        run: |
-          ldd --version | head -1 || true
-
+      # A musl ELF cannot be loaded by the host's glibc Node, so the fixtures
+      # have to run in a musl userland. `docker run node:22-alpine` is the same
+      # route `setup-bindings` already uses to compile the addon, and it is used
+      # here rather than a chroot: a chroot changes the filesystem root but not
+      # the dynamic loader, so glibc would still be the one resolving symbols and
+      # `node` would fail to start with exit 127.
       - name: Run the native consumer fixtures against the musl addon
-        if: steps.musl.outputs.present == 'true'
         shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         run: |
-          # The chrooted Node is what `npm` and `node` resolve to now, so the
-          # fixture installs and runs entirely inside the musl userland.
+          set -uo pipefail
+          # Stating this up front keeps the failure legible: if the addon is
+          # missing, the job says so rather than surfacing a confusing install
+          # error from inside the container.
+          ls dist-artifacts/napi/linux-x64-musl/polylib-polylib-js-linux-x64-musl-*.tgz
+          # The container script is written to a file instead of being passed as
+          # a single-quoted argument: its comments are prose and an apostrophe in
+          # one of them would terminate the quote and split the command.
+          cat > /tmp/inside-container.sh <<'SCRIPT'
+          set -eu
+          # The fixture runner is a Python module, so the container needs an
+          # interpreter and the tool dependencies to import it. Alpine keeps pip
+          # in its own package, and marks its Python as externally managed, so
+          # the PEP 668 override is required here as on the host.
+          apk add --no-cache python3 py3-pip
+          # Tasknest imports every tool module it discovers, not just the one
+          # being run, so the dependencies are the whole tool set rather than
+          # the single package the fixtures need. `jinja2` is the only one that
+          # is not already satisfied by tasknest.
+          python3 -m pip install --no-cache-dir --break-system-packages \
+            "tasknest==0.4.0" "jinja2>=3.1,<4"
+          node --version
+          npm --version
+          cd /w
+          # _platform_tarballs globs one level deep, so the directory has to be
+          # the one holding the tarball rather than dist-artifacts/napi with
+          # per-suffix directories beneath it.
           python3 -B -m tasknest run ts consumers \
             --tarball-dir dist-artifacts \
-            --platform-dir dist-artifacts/napi \
+            --platform-dir dist-artifacts/napi/linux-x64-musl \
             --cases native
+          SCRIPT
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/w" \
+            -v "/tmp/inside-container.sh:/inside.sh:ro" \
+            -w /w \
+            -e PYTHONPATH=/w \
+            node:22-alpine \
+            sh -eux /inside.sh 2>&1 | tee /tmp/fixtures.log
+          status="${PIPESTATUS[0]}"
+          # A green tick is not evidence that the fixtures ran: this job once
+          # reported success while skipping every step that loaded the addon.
+          # The proof is emitted on the passing path too, so a reviewer can see
+          # which addon was installed and how many fixtures passed without
+          # needing the job log.
+          printf '::notice::exit=%s\n' "$status"
+          grep -E 'Addon package|fixture|passed|verification|node v' /tmp/fixtures.log \
+            | tail -n 15 | while IFS= read -r line; do
+              printf '::notice::%s\n' "${line//'%'/%25}"
+            done
+          if [ "$status" -ne 0 ]; then
+            # The job log is the real record, but it is not always reachable from
+            # an API client, so the failing lines are mirrored into annotations.
+            printf '::error::consumer fixtures exited %s\n' "$status"
+            grep -iE 'error|fail|cannot|not found|ENOENT|ERR!' /tmp/fixtures.log \
+              | tail -n 25 | while IFS= read -r line; do
+                printf '::error::%s\n' "${line//'%'/%25}"
+              done
+            exit "$status"
+          fi
 
   bun-versions:
     name: Bun Compatibility (Bun ${{ matrix.bun-version }})

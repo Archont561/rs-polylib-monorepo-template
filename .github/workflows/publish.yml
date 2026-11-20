@@ -134,7 +134,12 @@ jobs:
           # before it does. `@polylib/polylib` peers on the WebAssembly package,
           # so that goes next, and the facade last. A missing platform package
           # fails the release rather than being skipped.
-          npm_dir=release-bundle/artifacts-npm
+          # `npm publish` treats the artifact argument as a package spec, and a
+          # spec it cannot resolve locally falls through to git. A *relative*
+          # tarball path is resolved that way: npm runs `git ls-remote` against
+          # the path and dies with exit 128. Absolute paths are recognised as
+          # tarballs, so every path passed to `npm publish` is made absolute.
+          npm_dir="$PWD/release-bundle/artifacts-npm"
           platforms=()
           for tarball in "$npm_dir"/polylib-polylib-js-*-*-*.tgz; do
             [ -e "$tarball" ] || continue
@@ -154,9 +159,9 @@ jobs:
             echo "publishing $tarball"
             npm publish "${flags[@]}" "$tarball"
           done
-          wasm_tgz=(release-bundle/artifacts-npm/polylib-polylib-wasm-*.tgz)
-          js_tgz=(release-bundle/artifacts-npm/polylib-polylib-js-[0-9]*.tgz)
-          ts_tgz=(release-bundle/artifacts-npm/polylib-polylib-[0-9]*.tgz)
+          wasm_tgz=("$npm_dir"/polylib-polylib-wasm-*.tgz)
+          js_tgz=("$npm_dir"/polylib-polylib-js-[0-9]*.tgz)
+          ts_tgz=("$npm_dir"/polylib-polylib-[0-9]*.tgz)
           npm publish "${flags[@]}" "${wasm_tgz[0]}"
           npm publish "${flags[@]}" "${js_tgz[0]}"
           npm publish "${flags[@]}" "${ts_tgz[0]}"
@@ -284,7 +289,10 @@ jobs:
             --output-dir dist-gh-npm
           # Same ordering as npmjs: the platform packages a package depends on
           # must exist before the package that names them.
-          platforms=(dist-gh-npm/*-polylib-js-*-*-*.tgz)
+          # Absolute for the same reason as the npmjs job: a relative tarball
+          # path is read as a git spec and `npm publish` exits 128.
+          gh_dir="$PWD/dist-gh-npm"
+          platforms=("$gh_dir"/*-polylib-js-*-*-*.tgz)
           flags=(--registry https://npm.pkg.github.com)
           if [ "$DRY_RUN" = "true" ]; then
             flags+=(--dry-run)
@@ -293,9 +301,9 @@ jobs:
             [ -e "$tarball" ] || continue
             npm publish "${flags[@]}" "$tarball"
           done
-          wasm_tgz=(dist-gh-npm/*-polylib-wasm-*.tgz)
-          js_tgz=(dist-gh-npm/*-polylib-js-[0-9]*.tgz)
-          ts_tgz=(dist-gh-npm/*-polylib-[0-9]*.tgz)
+          wasm_tgz=("$gh_dir"/*-polylib-wasm-*.tgz)
+          js_tgz=("$gh_dir"/*-polylib-js-[0-9]*.tgz)
+          ts_tgz=("$gh_dir"/*-polylib-[0-9]*.tgz)
           npm publish "${flags[@]}" "${wasm_tgz[0]}"
           npm publish "${flags[@]}" "${js_tgz[0]}"
           npm publish "${flags[@]}" "${ts_tgz[0]}"
