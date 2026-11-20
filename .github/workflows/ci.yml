@@ -534,7 +534,13 @@ jobs:
             # from an API client than a multi-megabyte log, so the tail of the
             # container's output is mirrored into annotations as well.
             printf '::error::consumer fixtures exited %s\n' "$status"
-            tail -n 60 /tmp/fixtures.log | while IFS= read -r line; do
+            # Annotations are capped per run, and the interesting lines are the
+            # failing ones, so they are surfaced first and the raw tail second.
+            grep -iE 'error|fail|cannot|not found|ENOENT|ERR!|exit' /tmp/fixtures.log \
+              | tail -n 25 | while IFS= read -r line; do
+                printf '::error::%s\n' "${line//'%'/%25}"
+              done
+            tail -n 45 /tmp/fixtures.log | while IFS= read -r line; do
               printf '::error::%s\n' "${line//'%'/%25}"
             done
             exit "$status"
