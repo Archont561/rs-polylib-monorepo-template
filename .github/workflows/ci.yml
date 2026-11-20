@@ -444,7 +444,13 @@ jobs:
   node-musl:
     name: Node.js Compatibility (musl addon on glibc host)
     needs: [changes, polyglot-bindings]
-    if: github.event_name != 'push' && needs.changes.outputs.js == 'true'
+    # This runs on every event, including a push to main. It used to exclude
+    # `push`, on the theory that `build.yml` would have produced the addon by
+    # then — but artifacts belong to the run that made them, and `download-artifact`
+    # cannot read another run's without a `run-id`. The job therefore never had
+    # an addon on any event, and reported success after skipping every step that
+    # tested one.
+    if: needs.changes.outputs.js == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -453,49 +459,41 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Pixi + Bun for the consumer harness
-        uses: ./.github/actions/setup-rust
-        with:
-          environment: full
-          install-bun: "true"
-          cache-key: ci-node-musl
-
       - name: Download packed TypeScript tarballs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: polylib-ts-tarballs
           path: dist-artifacts
 
-      - name: Download the musl addon package
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: napi-linux-x64-musl
-          path: dist-artifacts/napi
-          merge-multiple: true
-
+      # `setup-bindings` installs the same Pixi full environment and Bun
+      # workspace the rest of the job needs, so there is no separate setup step.
+      #
       # The addon is a musl ELF and this host is glibc, so `host_suffix()` would
-      # hand the fixtures the glibc package. The musl one is built by `build.yml`,
-      # which does not run on a pull request, so this job only has something to
-      # prove when that artifact exists. Compiling one here is not an option: the
-      # pixi toolchain ships no musl target and Alpine 3.20's cargo is older than
-      # the workspace's `rust-version`.
-      - name: Check for the musl addon package
-        id: musl
+      # hand the fixtures the glibc package. It has to be a musl one, and it has
+      # to be built here: `build.yml` produces one, but its artifacts belong to
+      # its own run. `setup-bindings` carries the same musl route the release
+      # build uses, so this proves that route and then proves the result loads.
+      - name: Compile the musl addon
+        uses: ./.github/actions/setup-bindings
+        with:
+          cache-key: ci-node-musl
+          napi-target: x86_64-unknown-linux-musl
+          cross-mode: musl
+
+      - name: Stage and pack the musl addon
         shell: bash
         run: |
           set -euo pipefail
-          if ls dist-artifacts/napi/polylib-polylib-js-linux-x64-musl-*.tgz >/dev/null 2>&1; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No musl addon package: it is built by build.yml, which runs on a push to main, so this job only proves itself there."
-          fi
+          pixi run -e full tools run bindings stage_napi --suffix linux-x64-musl
+          mkdir -p dist-artifacts/napi/linux-x64-musl
+          pixi run -e full bun pm pack \
+            --cwd packages/polylib-js/npm/linux-x64-musl \
+            --destination "$PWD/dist-artifacts/napi/linux-x64-musl"
 
       # The loaded addon is a musl ELF, so the process that requires it must be a
       # musl binary. Alpine's Node is installed with apk into its own root, which
       # is enough to require the package without pinning a container image.
       - name: Install the Alpine Node.js that will load the musl addon
-        if: steps.musl.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -506,22 +504,33 @@ jobs:
           sudo tar xzf /tmp/alpine-minirootfs.tar.gz -C "$root"
           sudo cp /etc/resolv.conf "$root/etc/resolv.conf"
           sudo chroot "$root" /sbin/apk add --no-cache nodejs npm
+          # The chroot was only a way to run `apk`. Exporting the directory
+          # through `$GITHUB_PATH` is what puts this Node ahead of the pixi one
+          # for every later step; `$GITHUB_ENV` is a host file the chroot cannot
+          # reach, and a bare `export` would not survive into the next step.
           echo "$root/usr/bin" >> "$GITHUB_PATH"
 
       - name: Report which libc the addon is loaded by
-        if: steps.musl.outputs.present == 'true'
         shell: bash
         run: |
           ldd --version | head -1 || true
+          # Prove the Node this job will use is the musl one, not the host's.
+          # A glibc-linked Node cannot load a musl addon at all, so if this is
+          # the wrong binary the fixture step fails rather than proving anything.
+          echo "node on PATH: $(command -v node)"
+          node --version
+          node -e 'const h=process.report.getReport().header; console.log("glibc runtime:", h.glibcVersionRuntime ?? "none (musl)")'
+
 
       - name: Run the native consumer fixtures against the musl addon
-        if: steps.musl.outputs.present == 'true'
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           # The chrooted Node is what `npm` and `node` resolve to now, so the
           # fixture installs and runs entirely inside the musl userland.
+          command -v node
+          node --version
           python3 -B -m tasknest run ts consumers \
             --tarball-dir dist-artifacts \
             --platform-dir dist-artifacts/napi \
