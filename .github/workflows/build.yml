@@ -205,7 +205,15 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: artifacts-npm
-          path: dist-artifacts/npm/*.tgz
+          # `napi-platforms.json` is written by `release pack` beside the
+          # tarballs and lists the platform packages this release actually has.
+          # The publish step compares its length against the tarballs it can
+          # see and refuses the release when they disagree, so publishing it is
+          # not optional: without it the step reads zero and fails a release
+          # that is complete.
+          path: |
+            dist-artifacts/npm/*.tgz
+            dist-artifacts/npm/napi-platforms.json
           if-no-files-found: error
 
   build-napi-platforms:
