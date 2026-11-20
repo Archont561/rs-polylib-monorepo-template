@@ -540,6 +540,16 @@ jobs:
             node:22-alpine \
             sh -eux /inside.sh 2>&1 | tee /tmp/fixtures.log
           status="${PIPESTATUS[0]}"
+          # A green tick is not evidence that the fixtures ran: this job once
+          # reported success while skipping every step that loaded the addon.
+          # The proof is emitted on the passing path too, so a reviewer can see
+          # which addon was installed and how many fixtures passed without
+          # needing the job log.
+          printf '::notice::exit=%s\n' "$status"
+          grep -E 'Addon package|fixture|passed|verification|node v' /tmp/fixtures.log \
+            | tail -n 15 | while IFS= read -r line; do
+              printf '::notice::%s\n' "${line//'%'/%25}"
+            done
           if [ "$status" -ne 0 ]; then
             # The job log is the real record, but it is not always reachable from
             # an API client, so the failing lines are mirrored into annotations.
