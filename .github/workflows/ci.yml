@@ -510,12 +510,16 @@ jobs:
           cat > /tmp/inside-container.sh <<'SCRIPT'
           set -eu
           # The fixture runner is a Python module, so the container needs an
-          # interpreter and the pinned Tasknest release to import it. Alpine
-          # keeps pip in its own package, and marks its Python as externally
-          # managed, so the PEP 668 override is required here as on the host.
+          # interpreter and the tool dependencies to import it. Alpine keeps pip
+          # in its own package, and marks its Python as externally managed, so
+          # the PEP 668 override is required here as on the host.
           apk add --no-cache python3 py3-pip
+          # Tasknest imports every tool module it discovers, not just the one
+          # being run, so the dependencies are the whole tool set rather than
+          # the single package the fixtures need. `jinja2` is the only one that
+          # is not already satisfied by tasknest.
           python3 -m pip install --no-cache-dir --break-system-packages \
-            "tasknest==0.4.0"
+            "tasknest==0.4.0" "jinja2>=3.1,<4"
           node --version
           npm --version
           cd /w
