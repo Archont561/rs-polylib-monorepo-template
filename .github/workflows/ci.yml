@@ -511,15 +511,21 @@ jobs:
             node:22-alpine \
             sh -euxc '
               # The fixture runner is a Python module, so the container needs an
-              # interpreter and the pinned Tasknest release to import it.
-              apk add --no-cache python3
-              pip install --no-cache-dir --break-system-packages "tasknest==0.4.0"
+              # interpreter and the pinned Tasknest release to import it. Alpine
+              # keeps `pip` in its own package — installing `python3` alone leaves
+              # it absent and the step dies on a bare `pip: not found`.
+              apk add --no-cache python3 py3-pip
+              python3 -m pip install --no-cache-dir --break-system-packages \
+                "tasknest==0.4.0"
               node --version
               npm --version
               cd /w
+              # `_platform_tarballs` globs one level deep, so the directory has
+              # to be the one holding the tarball rather than `dist-artifacts/napi`
+              # with per-suffix directories beneath it.
               python3 -B -m tasknest run ts consumers \
                 --tarball-dir dist-artifacts \
-                --platform-dir dist-artifacts/napi \
+                --platform-dir dist-artifacts/napi/linux-x64-musl \
                 --cases native
             '
 
